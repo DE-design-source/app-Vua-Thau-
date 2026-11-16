@@ -28,7 +28,7 @@ class VuaThauApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Vua Thầu Nghiệm thu',
+      title: 'Vua Thầu Map',
       debugShowCheckedModeBanner: false,
       navigatorKey: navKey,
       navigatorObservers: [routeObserver],

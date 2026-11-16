@@ -1,6 +1,6 @@
 {
-    "name": "Vua Thầu Nghiệm thu",
-    "short_name": "Vua Thầu",
+    "name": "Vua Thầu Map",
+    "short_name": "Vua Thầu Map",
     "start_url": ".",
     "scope": ".",
     "display": "standalone",
