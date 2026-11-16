@@ -3,13 +3,14 @@
 // Luật kiểm ảnh, luật tiền, AI, Drive đều nằm ở máy chủ.
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show SocketException;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
 
+import 'lfile.dart';
 import 'toast.dart';
 
 /// Đổi máy chủ khi build: flutter build apk --dart-define=API_URL=https://...
@@ -181,8 +182,7 @@ Future<Json> upload(String path, List<UpFile> files, {Map<String, String> fields
   req.fields.addAll(fields);
   for (final f in files) {
     final parts = f.mime.split('/');
-    req.files.add(await http.MultipartFile.fromPath(f.field, f.path, filename: f.name,
-        contentType: parts.length == 2 ? MediaType(parts[0], parts[1]) : null));
+    req.files.add(await multipartOf(f.field, f.path, f.name, parts.length == 2 ? MediaType(parts[0], parts[1]) : null));
   }
   final total = req.contentLength;
   final body = req.finalize();

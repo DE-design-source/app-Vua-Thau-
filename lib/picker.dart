@@ -1,11 +1,10 @@
 // Chọn ảnh có sẵn trong máy (ảnh Timemark...), xem trước, bỏ bớt, tải lên có báo %. Dùng ở Nộp ảnh và trong hồ sơ.
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'api.dart';
 import 'check.dart';
+import 'lfile.dart';
 import 'toast.dart';
 import 'ui.dart';
 
@@ -69,7 +68,7 @@ class _PhotoPickerState extends State<PhotoPicker> {
     if (got.isEmpty) return;
     final big = <XFile>[];
     for (final a in got) {
-      if (await File(a.path).length() > _limit) big.add(a);
+      if (await localLength(a.path) > _limit) big.add(a);
     }
     final all = [...files, ...got.where((a) => !big.contains(a) && !files.any((x) => x.path == a.path))];
     final keep = all.take(room).toList();
@@ -122,7 +121,7 @@ class _PhotoPickerState extends State<PhotoPicker> {
         PhotoGrid(children: [
           for (var k = 0; k < files.length; k++)
             Stack(fit: StackFit.expand, children: [
-              Image.file(File(files[k].path), fit: BoxFit.cover, cacheWidth: 400),
+              localImage(files[k].path, fit: BoxFit.cover, cacheWidth: 400),
               CheckBadge(checks[files[k].path]),
               DelBtn(icon: 'x', label: 'Bỏ ảnh ${k + 1}', onTap: pct == null ? () => setState(() => files.removeAt(k)) : null),
             ]),

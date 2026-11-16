@@ -1,14 +1,14 @@
 // Dải chữ y hệt Timemark: vạch vàng + "Thứ Hai, 09 Tháng 11,2026 06:45", địa chỉ, toạ độ °N/°E ở góc trái;
 // logo Vua Thầu + "100% Chân thực" ở góc phải; khiên + mã + "Vua Thầu Verified" chạy dọc mép phải.
 // Chép từ stamp() của web (static/camera.js). Khung ngắm và ảnh chụp vẽ bằng CÙNG hàm này nên chụp ra đúng như thấy.
-import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
-import 'package:path_provider/path_provider.dart';
+
+import 'lfile.dart';
 
 class Pos {
   const Pos(this.lat, this.lng, this.acc);
@@ -169,8 +169,7 @@ Uint8List _encode((Uint8List, int, int) a) {
 
 /// Ảnh vừa chụp -> thu về tối đa 1920px, in dải chữ, lưu JPEG vào bộ nhớ tạm. Trả đường dẫn file mới.
 Future<String> stampPhoto(String path, StampData d) async {
-  final src = File(path);
-  final codec = await ui.instantiateImageCodec(await src.readAsBytes());
+  final codec = await ui.instantiateImageCodec(await readLocal(path));
   final pic = (await codec.getNextFrame()).image;
   final k = math.min(1.0, _maxSide / math.max(pic.width, pic.height));
   final W = (pic.width * k).round(), H = (pic.height * k).round();
@@ -187,11 +186,7 @@ Future<String> stampPhoto(String path, StampData d) async {
   if (rgba == null) throw Exception('máy không đủ bộ nhớ để in chữ lên ảnh');
 
   final jpg = await compute(_encode, (rgba.buffer.asUint8List(), W, H));
-  final dir = await getTemporaryDirectory();
-  final f = File('${dir.path}/vuathau-${d.date.millisecondsSinceEpoch}.jpg');
-  await f.writeAsBytes(jpg, flush: true);
-  try {
-    await src.delete();
-  } catch (_) {}
-  return f.path;
+  final saved = await saveTemp(jpg, 'vuathau-${d.date.millisecondsSinceEpoch}.jpg');
+  deleteLocal(path);
+  return saved;
 }

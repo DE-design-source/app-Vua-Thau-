@@ -119,7 +119,7 @@ class _BootState extends State<Boot> {
 
   /// App cài từ link Zalo (APK) không tự cập nhật: hỏi máy chủ bản mới nhất, mới hơn thì mời tải về cài đè.
   Future<void> checkUpdate() async {
-    if (kDebugMode) return;
+    if (kDebugMode || kIsWeb) return; // bản web luôn là bản mới nhất
     try {
       final mine = int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0;
       final r = await http.get(Uri.parse('$host/tai-app/phien-ban')).timeout(const Duration(seconds: 10));

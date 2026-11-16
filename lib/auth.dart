@@ -1,8 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'dart:io' show Platform;
 
 import 'api.dart';
 import 'toast.dart';
@@ -100,7 +100,7 @@ class GoogleUser {
 /// Tài khoản Google vừa chọn nhưng chưa đăng ký: Đăng nhập chuyển sang Đăng ký kèm thông tin này.
 GoogleUser? pendingGoogle;
 
-bool googleOn() => Platform.isAndroid && cfg.google.isNotEmpty;
+bool googleOn() => !kIsWeb && defaultTargetPlatform == TargetPlatform.android && cfg.google.isNotEmpty;
 
 bool _gInit = false;
 

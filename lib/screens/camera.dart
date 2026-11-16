@@ -2,7 +2,6 @@
 // Chưa có GPS thì không cho chụp: ảnh nghiệm thu bắt buộc có vị trí.
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
@@ -12,6 +11,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../api.dart';
 import '../check.dart';
+import '../lfile.dart';
 import '../picker.dart';
 import '../stamp.dart';
 import '../toast.dart';
@@ -99,8 +99,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       final back = all.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => all.first);
       final c = CameraController(back, ResolutionPreset.max, enableAudio: false, imageFormatGroup: ImageFormatGroup.jpeg);
       await c.initialize();
-      await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
-      await c.setFlashMode(torch ? FlashMode.torch : FlashMode.off);
+      // bản web: trình duyệt có thể không khoá xoay / không có đèn, bỏ qua
+      try {
+        await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
+      } catch (_) {}
+      try {
+        await c.setFlashMode(torch ? FlashMode.torch : FlashMode.off);
+      } catch (_) {}
       if (!mounted) {
         c.dispose();
         return;
@@ -164,9 +169,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   Future<void> leave() async {
     if (shots.isEmpty || await confirm(context, title: 'Bỏ ảnh vừa chụp?', text: 'Ảnh chưa tải lên sẽ mất.', ok: 'Bỏ ảnh', cancel: 'Ở lại')) {
       for (final s in shots) {
-        try {
-          File(s.path).deleteSync();
-        } catch (_) {}
+        deleteLocal(s.path);
       }
       shots.clear();
       if (mounted) Navigator.of(context).pop();
@@ -201,9 +204,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   }
 
   void drop(int k) {
-    try {
-      File(shots[k].path).deleteSync();
-    } catch (_) {}
+    deleteLocal(shots[k].path);
     setState(() {
       shots.removeAt(k);
       if (shots.isEmpty) review = false;
@@ -422,7 +423,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   child: shots.isEmpty
                       ? null
                       : Stack(fit: StackFit.expand, children: [
-                          Image.file(File(shots.last.path), fit: BoxFit.cover, cacheWidth: 200),
+                          localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200),
                           Positioned(
                             right: 2,
                             top: 2,
@@ -515,7 +516,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               PhotoGrid(children: [
                 for (var k = 0; k < shots.length; k++)
                   Stack(fit: StackFit.expand, children: [
-                    Image.file(File(shots[k].path), fit: BoxFit.cover, cacheWidth: 400),
+                    localImage(shots[k].path, fit: BoxFit.cover, cacheWidth: 400),
                     DelBtn(icon: 'trash', label: 'Bỏ ảnh ${k + 1}', onTap: pct == null ? () => drop(k) : null),
                     Positioned(
                       left: 8,
