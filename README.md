@@ -3,8 +3,15 @@
 App Flutter dành cho **cộng tác viên (CTV)**: chụp ảnh công trình đang xây, nộp hồ sơ nghiệm thu, theo dõi duyệt và nhận tiền.
 Admin và kế toán dùng **web**; app và web dùng chung một máy chủ nên chung dữ liệu.
 
-App viết lại giao diện và chức năng của bản Expo trong `vuathau-nghiemthu/mobile` và gọi đúng các route của máy chủ
-`https://nghiemthu.vuathau.com.vn`. Mọi request gửi header `X-App: 1`: GET trả dữ liệu trang dạng JSON, POST trả `{url, msgs, token}`.
+App viết lại giao diện và chức năng của bản Expo trong `vuathau-nghiemthu/mobile`. Máy chủ là **backend Go** trong repo
+`DE-design-source/VuaThau` (thư mục `backend`), dùng chung với web quản lý của admin và kế toán. App gọi API REST
+`https://nghiemthu.vuathau.com.vn/api/v1`:
+
+- Mọi response là envelope `{"success": true, "data": ...}` hoặc `{"success": false, "error": "..."}`; app trả `data`, báo `error`.
+- Đăng nhập (`POST /auth/login`, `/auth/register`, `/auth/google`) trả JWT; app lưu bằng flutter_secure_storage và gửi
+  `Authorization: Bearer <token>`. Gặp 401 (hết phiên, đổi mật khẩu, bị khoá): app xoá token, về màn Đăng nhập.
+- POST/PUT gửi JSON; tải ảnh lên là multipart (`files` + `meta`).
+- Hợp đồng API đầy đủ: `backend/docs/nghiemthu-api.md` trong repo VuaThau.
 
 ## Chức năng
 
@@ -21,12 +28,12 @@ App viết lại giao diện và chức năng của bản Expo trong `vuathau-ng
 
 ```
 lib/
-  main.dart          khởi động: lấy /app.json, token đã lưu → Đăng nhập hoặc app
-  api.dart           gọi máy chủ, lưu token (flutter_secure_storage), tải ảnh có báo %
+  main.dart          khởi động: lấy GET /config, token đã lưu → Đăng nhập hoặc app
+  api.dart           gọi /api/v1 (envelope, JWT), lưu token (flutter_secure_storage), tải ảnh có báo %
   ui.dart            màu, icon, nút, thẻ, ô nhập dùng chung (cùng bộ màu với web)
   page.dart          tải dữ liệu trang, tự tải lại khi quay về màn
   auth.dart          đầu trang đăng nhập, Google Sign-In, 3 ô ngân hàng
-  check.dart         AI kiểm ảnh (/api/kiem-anh)
+  check.dart         AI kiểm ảnh (POST /photos/check)
   picker.dart        chọn ảnh có sẵn + tải lên
   stamp.dart         vẽ dải chữ Timemark lên khung ngắm và ảnh
   screens/           các màn hình
@@ -43,7 +50,14 @@ flutter build apk --release                 # build/app/outputs/flutter-apk/app-
 flutter build apk --release --split-per-abi # APK nhỏ hơn cho từng loại máy
 ```
 
-Đổi máy chủ: `flutter build apk --dart-define=API_URL=https://may-chu-khac`.
+Đổi máy chủ: `--dart-define=API_URL=...` (chỉ ghi gốc máy chủ, app tự thêm `/api/v1`), vd:
+
+```bash
+flutter build apk --dart-define=API_URL=https://may-chu-khac
+flutter run --dart-define=API_URL=http://10.0.2.2:8080   # máy ảo Android gọi backend Go chạy trên máy tính
+```
+
+Bản debug cho phép gọi `http://` (`android/app/src/debug/AndroidManifest.xml`); bản release chỉ gọi `https://`.
 
 ### Ký bản phát hành
 
@@ -64,7 +78,7 @@ keyPassword=...
 
 ### Đăng nhập bằng Google
 
-App lấy `GOOGLE` (web client id) từ `/app.json`. Để nút Google hoạt động, trong Google Cloud Console (cùng project với
+App lấy `google_client_id` (web client id) từ `GET /api/v1/config`. Để nút Google hoạt động, trong Google Cloud Console (cùng project với
 web client id đó) cần tạo **OAuth client loại Android** với package `vn.com.vuathau.app` và SHA-1 của khoá ký APK
 (`keytool -list -v -keystore android/vuathau.jks`). Chưa làm bước này thì vẫn đăng nhập được bằng số điện thoại + mật khẩu.
 

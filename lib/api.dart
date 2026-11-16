@@ -1,5 +1,6 @@
-// Nói chuyện với máy chủ nghiemthu.vuathau.com.vn. App gọi đúng các route của web, gửi header X-App: 1:
-// GET trả dữ liệu trang dạng JSON, POST trả {url, msgs, token}. Luật kiểm ảnh, luật tiền, AI, Drive đều nằm ở máy chủ.
+// Nói chuyện với máy chủ Go (repo DE-design-source/VuaThau), API REST dưới /api/v1, dùng chung với web quản lý.
+// Mọi response là {success, data, error}; đăng nhập bằng JWT (Authorization: Bearer).
+// Luật kiểm ảnh, luật tiền, AI, Drive đều nằm ở máy chủ.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -12,21 +13,26 @@ import 'package:http_parser/http_parser.dart' show MediaType;
 import 'toast.dart';
 
 /// Đổi máy chủ khi build: flutter build apk --dart-define=API_URL=https://...
-const base = String.fromEnvironment('API_URL', defaultValue: 'https://nghiemthu.vuathau.com.vn');
+/// (máy ảo Android gọi backend chạy trên máy tính: http://10.0.2.2:8080)
+const host = String.fromEnvironment('API_URL', defaultValue: 'https://nghiemthu.vuathau.com.vn');
+const base = '$host/api/v1';
 
 typedef Json = Map<String, dynamic>;
 
-/// Cấu hình chung lấy từ máy chủ (/app.json): trạng thái, luật tiền, giai đoạn, ngân hàng...
+/// Cấu hình chung lấy từ máy chủ (GET /config): trạng thái, luật tiền, giai đoạn, ngân hàng...
 class Cfg {
   Cfg.fromJson(Json j)
-      : status = (j['STATUS'] as Map).map((k, v) => MapEntry('$k', (v as List).map((e) => '$e').toList())),
-        payMin = (j['PAY_MIN'] as num).toInt(),
-        minPhotos = (j['MIN_PHOTOS'] as num).toInt(),
-        maxPhotos = (j['MAX_PHOTOS'] as num).toInt(),
-        stages = (j['STAGES'] as List).map((e) => '$e').toList(),
-        banks = (j['BANKS'] as List).map((e) => '$e').toList(),
-        pay = (j['PAY'] as List).map((e) => (e as num).toInt()).toList(),
-        google = '${j['GOOGLE'] ?? ''}';
+      : status = ((j['statuses'] as Map?) ?? const {}).map((k, v) {
+          final m = (v as Map?) ?? const {};
+          return MapEntry('$k', ['${m['label'] ?? k}', '${m['ctv_label'] ?? m['label'] ?? k}', '${m['tone'] ?? 'draft'}']);
+        }),
+        payMin = (j['pay_min'] as num).toInt(),
+        minPhotos = (j['min_photos'] as num).toInt(),
+        maxPhotos = (j['max_photos'] as num).toInt(),
+        stages = ((j['stages'] as List?) ?? const []).map((e) => '$e').toList(),
+        banks = ((j['banks'] as List?) ?? const []).map((e) => '$e').toList(),
+        pay = ((j['pay'] as List?) ?? const [0]).map((e) => (e as num).toInt()).toList(),
+        google = '${j['google_client_id'] ?? ''}';
 
   /// mã: [nhãn nội bộ, nhãn cho CTV, tông màu]
   final Map<String, List<String>> status;
@@ -39,7 +45,7 @@ class Cfg {
   /// webClientId cho Đăng nhập bằng Google; trống = máy chủ chưa bật
   final String google;
 
-  int payFor(int n) => pay[n.clamp(0, pay.length - 1)];
+  int payFor(int n) => pay.isEmpty ? 0 : pay[n.clamp(0, pay.length - 1)];
   String statusLabel(String s) => status[s]?[1] ?? s;
   String statusTone(String s) => status[s]?[2] ?? 'draft';
 }
@@ -49,23 +55,30 @@ late Cfg cfg;
 /// Đăng nhập hay chưa: màn gốc nghe để chuyển giữa Đăng nhập và app.
 final authed = ValueNotifier<bool>(false);
 
-/// Số hồ sơ CTV cần xử lý (nháp + bị trả lại), máy chủ gửi kèm mọi trang.
+/// Số hồ sơ CTV cần xử lý (nháp + bị trả lại): `todo` của /ctv/home và /me.
 final badge = ValueNotifier<int>(0);
+
+/// Người đang đăng nhập (User của máy chủ). Mở lại app: lấy lại qua /me.
+final me = ValueNotifier<Json?>(null);
 
 String? _token;
 const _store = FlutterSecureStorage();
-const _staffHome = ['/duyet', '/ke-toan'];
 
 class ApiError implements Exception {
-  ApiError(this.message);
+  ApiError(this.message, [this.status = 0]);
   final String message;
+  final int status;
   @override
   String toString() => message;
 }
 
 String errMsg(Object e) => e is ApiError ? e.message : '$e';
 
-List<String> msgsOf(Json j) => (j['msgs'] as List?)?.map((e) => '$e').toList() ?? const [];
+/// Câu báo của thao tác ghi: data.message + data.messages (nếu có).
+List<String> msgsOf(Json j) => [
+      if (j['message'] is String && (j['message'] as String).isNotEmpty) j['message'] as String,
+      ...?(j['messages'] as List?)?.map((e) => '$e'),
+    ];
 
 Future<void> start() async {
   String? t;
@@ -74,8 +87,7 @@ Future<void> start() async {
   } catch (_) {
     t = null; // kho khoá của máy hỏng: coi như chưa đăng nhập
   }
-  final r = await http.get(Uri.parse('$base/app.json')).timeout(const Duration(seconds: 20));
-  cfg = Cfg.fromJson(jsonDecode(utf8.decode(r.bodyBytes)) as Json);
+  cfg = Cfg.fromJson(await api('/config'));
   _token = t;
   authed.value = t != null;
 }
@@ -84,6 +96,7 @@ bool loggedIn() => _token != null;
 
 Future<void> setToken(String? t) async {
   _token = t;
+  if (t == null) me.value = null;
   authed.value = t != null;
   try {
     if (t != null) {
@@ -94,34 +107,31 @@ Future<void> setToken(String? t) async {
   } catch (_) {/* vẫn dùng được trong phiên này */}
 }
 
-Map<String, String> authHeaders() => {'X-App': '1', if (_token != null) 'Authorization': 'Bearer $_token'};
+Map<String, String> authHeaders() => {if (_token != null) 'Authorization': 'Bearer $_token'};
 
 /// Ảnh của hồ sơ (cần token). goc: ảnh gốc, không thì ảnh thu nhỏ 1568px.
-String photoUrl(int pid, {bool goc = false}) => '$base/anh/$pid${goc ? '?goc=1' : ''}';
+String photoUrl(int pid, {bool goc = false}) => '$base/photos/$pid${goc ? '?original=1' : ''}';
 
 Future<Json> _handle(Object? j, int status, String path) async {
-  if (j is! Json) throw ApiError('Máy chủ đang lỗi (mã $status). Thử lại sau ít phút.');
-  final url = j['url'];
-  // app chỉ cho CTV: không giữ phiên admin, kế toán
-  if (j['token'] is String && !_staffHome.contains(url)) await setToken(j['token'] as String);
-  if (j['badge'] is num && (j['badge'] as num).toInt() != badge.value) badge.value = (j['badge'] as num).toInt();
-  // Hết phiên, đổi mật khẩu, tài khoản bị khoá: về đăng nhập.
-  final locked = status == 403 && '${j['error'] ?? ''}'.contains('đã bị khoá');
-  if ((url == '/login' || locked) && !path.startsWith('/login')) {
-    final ms = msgsOf(j);
+  if (j is! Map) throw ApiError('Máy chủ đang lỗi (mã $status). Thử lại sau ít phút.', status);
+  final ok = j['success'] == true && status < 400;
+  if (!ok) {
     final e = '${j['error'] ?? ''}';
-    final msg = e.isNotEmpty ? e : ms.isNotEmpty ? ms.first : 'Hết phiên đăng nhập, đăng nhập lại nhé.';
-    if (_token != null) {
-      // nhiều màn cùng gọi: báo 1 lần. Xoá token là màn gốc tự đưa về đăng nhập.
-      await setToken(null);
-      toast(msg);
+    // Hết phiên, đổi mật khẩu ở máy khác, tài khoản bị khoá: về đăng nhập.
+    final locked = status == 403 && e.contains('khoá');
+    if ((status == 401 || locked) && !path.startsWith('/auth/')) {
+      final msg = e.isNotEmpty ? e : 'Hết phiên đăng nhập, đăng nhập lại nhé.';
+      if (_token != null) {
+        // nhiều màn cùng gọi: báo 1 lần. Xoá token là màn gốc tự đưa về đăng nhập.
+        await setToken(null);
+        toast(msg);
+      }
+      throw ApiError(msg, status);
     }
-    throw ApiError(msg);
+    throw ApiError(e.isNotEmpty ? e : 'Có lỗi xảy ra (mã $status).', status);
   }
-  final e = j['error'];
-  if (e != null && '$e'.isNotEmpty && e != false) throw ApiError('$e');
-  if (status >= 400) throw ApiError('Có lỗi xảy ra (mã $status).');
-  return j;
+  final data = j['data'];
+  return data is Map ? data.cast<String, dynamic>() : <String, dynamic>{};
 }
 
 Object? _decode(List<int> bytes) {
@@ -132,23 +142,31 @@ Object? _decode(List<int> bytes) {
   }
 }
 
-/// GET khi không có body, POST form khi có body.
-Future<Json> api(String path, [Map<String, String>? body]) async {
+/// Gọi /api/v1[path]: GET khi không có body; POST/PUT gửi JSON; DELETE. Trả `data` của envelope.
+Future<Json> api(String path, {String method = 'GET', Object? body}) async {
   final uri = Uri.parse(base + path);
+  final headers = {...authHeaders(), if (body != null) 'Content-Type': 'application/json; charset=utf-8'};
+  final req = http.Request(method, uri)..headers.addAll(headers);
+  if (body != null) req.body = jsonEncode(body);
+  final client = http.Client();
   http.Response r;
   try {
-    r = body == null
-        ? await http.get(uri, headers: authHeaders()).timeout(const Duration(seconds: 60))
-        : await http.post(uri, headers: authHeaders(), body: body).timeout(const Duration(seconds: 60));
+    r = await http.Response.fromStream(await client.send(req).timeout(const Duration(seconds: 60)));
   } on SocketException {
     throw ApiError('Mất kết nối. Kiểm tra mạng rồi thử lại.');
   } on http.ClientException {
     throw ApiError('Mất kết nối. Kiểm tra mạng rồi thử lại.');
   } on TimeoutException {
     throw ApiError('Máy chủ phản hồi chậm. Kiểm tra mạng rồi thử lại.');
+  } finally {
+    client.close();
   }
   return _handle(_decode(r.bodyBytes), r.statusCode, path);
 }
+
+Future<Json> post(String path, [Object? body]) => api(path, method: 'POST', body: body ?? const <String, dynamic>{});
+Future<Json> put(String path, Object body) => api(path, method: 'PUT', body: body);
+Future<Json> delete(String path) => api(path, method: 'DELETE');
 
 /// 1 file gửi kèm: tên trường form, đường dẫn trong máy, tên file, kiểu.
 class UpFile {
@@ -156,7 +174,7 @@ class UpFile {
   final String field, path, name, mime;
 }
 
-/// Tải ảnh lên (multipart) có báo % (0..1).
+/// Tải ảnh lên (multipart POST) có báo % (0..1).
 Future<Json> upload(String path, List<UpFile> files, {Map<String, String> fields = const {}, void Function(double)? onProgress}) async {
   final uri = Uri.parse(base + path);
   final req = http.MultipartRequest('POST', uri)..headers.addAll(authHeaders());
@@ -192,6 +210,15 @@ Future<Json> upload(String path, List<UpFile> files, {Map<String, String> fields
   } finally {
     client.close();
   }
+}
+
+/// Lấy lại thông tin người đang đăng nhập (tên cho lời chào) khi mở lại app.
+Future<void> loadMe() async {
+  try {
+    final j = await api('/me');
+    if (j['user'] is Map) me.value = (j['user'] as Map).cast<String, dynamic>();
+    if (j['todo'] is num) badge.value = (j['todo'] as num).toInt();
+  } catch (_) {/* lời chào chung */}
 }
 
 @visibleForTesting

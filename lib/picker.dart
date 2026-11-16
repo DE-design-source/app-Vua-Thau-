@@ -15,7 +15,8 @@ class PhotoPicker extends StatefulWidget {
   const PhotoPicker({super.key, required this.path, required this.have, required this.valid, required this.title, required this.onUploaded});
   final String path, title;
   final int have, valid;
-  final void Function(String url) onUploaded;
+  /// Kết quả tải lên: {message, messages, house_id | added}
+  final void Function(Json data) onUploaded;
   @override
   State<PhotoPicker> createState() => _PhotoPickerState();
 }
@@ -99,7 +100,7 @@ class _PhotoPickerState extends State<PhotoPicker> {
       );
       toast(msgsOf(j));
       if (mounted) setState(() => files = []);
-      widget.onUploaded(str(j['url']));
+      widget.onUploaded(j);
     } catch (e) {
       if (mounted) setState(() => err = errMsg(e));
     } finally {

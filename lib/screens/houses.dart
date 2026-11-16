@@ -1,4 +1,4 @@
-// Hồ sơ của tôi (như /cua-toi): tiền, tiến độ gom 5 hồ sơ, lọc theo trạng thái, danh sách hồ sơ.
+// Hồ sơ của tôi (GET /ctv/home): tiền, tiến độ gom 5 hồ sơ, lọc theo trạng thái, danh sách hồ sơ.
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -16,9 +16,31 @@ class HousesScreen extends StatefulWidget {
 class _HousesScreenState extends State<HousesScreen> with PageData {
   String loc = '';
   @override
-  String get path => '/cua-toi${loc.isNotEmpty ? '?loc=$loc' : ''}';
+  String get path => '/ctv/home${loc.isNotEmpty ? '?tab=$loc' : ''}';
   @override
   bool get watchRoute => false;
+
+  @override
+  void initState() {
+    super.initState();
+    me.addListener(_tick);
+    if (me.value == null) loadMe(); // mở lại app: lấy tên cho lời chào
+  }
+
+  void _tick() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    me.removeListener(_tick);
+    super.dispose();
+  }
+
+  @override
+  void onData(Json j) {
+    if (j['todo'] is num) badge.value = (j['todo'] as num).toInt();
+  }
 
   void setLoc(String k) {
     setState(() => loc = k);
@@ -28,7 +50,7 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
   @override
   Widget build(BuildContext context) {
     final d = this.d;
-    final user = d?['user'] as Json?;
+    final user = me.value;
     final name = user != null ? str(user['name']).trim().split(RegExp(r'\s+')).last : '';
     final rows = (d?['rows'] as List?)?.cast<Json>() ?? const <Json>[];
 
@@ -64,11 +86,10 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
   }
 
   Widget _head(Json d) {
-    final m = d['m'] as Json;
+    final m = (d['money'] as Map?) ?? const {};
     final approved = asInt(m['approved']);
-    final count = (d['count'] as Map?)?.map((k, v) => MapEntry('$k', asInt(v))) ?? const <String, int>{};
-    final tabs = (d['tabs'] as Map?)?.cast<String, dynamic>() ?? const <String, dynamic>{};
-    final canLam = count['can_lam'] ?? 0;
+    final tabs = (d['tabs'] as List?)?.cast<Map>() ?? const <Map>[];
+    final canLam = asInt(tabs.where((t) => t['key'] == 'can_lam').firstOrNull?['count']);
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       MoneyHero(label: 'Đã nhận', amount: asInt(m['paid']), stats: [('Chờ thanh toán', asInt(m['owed'])), ('Đang chờ duyệt', asInt(m['reviewing']))]),
       Lift(
@@ -99,11 +120,11 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
             SizedBox(
               height: 36,
               child: ListView(scrollDirection: Axis.horizontal, children: [
-                for (final e in tabs.entries)
-                  if (e.key.isEmpty || (count[e.key] ?? 0) > 0)
+                for (final t in tabs)
+                  if (str(t['key']).isEmpty || asInt(t['count']) > 0)
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
-                      child: _chip(e.key, str((e.value as List).first), count[e.key] ?? 0),
+                      child: _chip(str(t['key']), str(t['label']), asInt(t['count'])),
                     ),
               ]),
             ),
@@ -139,8 +160,7 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
   Widget _row(Json d, List<Json> rows, int index) {
     final r = rows[index];
     final id = asInt(r['id']);
-    final st = (d['stats'] as Map?)?['$id'] as Map? ?? const {};
-    final n = asInt(st['n']), valid = asInt(st['valid']), cover = st['cover'];
+    final n = asInt(r['photos_total']), valid = asInt(r['photos_valid']), cover = r['cover_id'];
     final bad = n - valid;
     final status = str(r['status']);
     final first = index == 0, last = index == rows.length - 1;

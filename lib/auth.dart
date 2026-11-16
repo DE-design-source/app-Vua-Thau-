@@ -27,25 +27,39 @@ class AuthTop extends StatelessWidget {
       );
 }
 
-/// Sau đăng nhập / đăng ký: app chỉ dành cho CTV, admin và kế toán dùng web.
+/// Sau đăng nhập / đăng ký (AuthResult {user, access_token}): app chỉ dành cho CTV, admin và kế toán dùng web.
 Future<void> signedIn(Json j) async {
-  final token = j['token'];
-  if (token is String && j['url'] == '/cua-toi') {
-    toast(msgsOf(j)); // token đã lưu: màn gốc tự mở màn Hồ sơ
+  final token = j['access_token'];
+  final user = j['user'] is Map ? (j['user'] as Map).cast<String, dynamic>() : null;
+  if (token is! String || token.isEmpty || user == null) {
+    toast('Chưa đăng nhập được, thử lại nhé.');
     return;
   }
-  if (token is String) {
-    await setToken(null);
-    toast('App dành cho cộng tác viên. Admin và kế toán dùng web nghiemthu.vuathau.com.vn.');
-    return;
+  if (user['role'] != 'ctv') {
+    toast('App dành cho cộng tác viên. Admin và kế toán dùng web quản lý.');
+    return; // không giữ phiên admin, kế toán
   }
-  final ms = msgsOf(j);
-  toast(ms.isNotEmpty ? ms : 'Chưa đăng nhập được, thử lại nhé.');
+  pendingGoogle = null;
+  me.value = user;
+  toast(msgsOf(j));
+  await setToken(token); // màn gốc tự mở màn Hồ sơ
+}
+
+/// Gửi id_token Google cho máy chủ. Trả null nếu đã đăng nhập xong; trả GoogleUser nếu Google này chưa đăng ký.
+Future<GoogleUser?> googleSignIn(GoogleUser g) async {
+  final j = await post('/auth/google', {'id_token': g.idToken});
+  if (j['registered'] == false) {
+    final gg = (j['google'] as Map?) ?? const {};
+    final email = '${gg['email'] ?? ''}', name = '${gg['name'] ?? ''}';
+    return GoogleUser(g.idToken, email.isNotEmpty ? email : g.email, name.isNotEmpty ? name : g.name);
+  }
+  await signedIn(j);
+  return null;
 }
 
 // ---------- Google ----------
 // App lấy id_token từ Google rồi gửi máy chủ; máy chủ hỏi Google để xác minh.
-// webClientId lấy từ máy chủ (/app.json): máy chủ chưa cấu hình thì app ẩn nút Google.
+// webClientId lấy từ máy chủ (GET /config, google_client_id): máy chủ chưa cấu hình thì app ẩn nút Google.
 
 class GoogleUser {
   const GoogleUser(this.idToken, this.email, this.name);
@@ -121,7 +135,7 @@ class BankCtl {
         no = TextEditingController(text: no),
         owner = TextEditingController(text: owner);
   final TextEditingController name, no, owner;
-  Map<String, String> toForm() => {'bank_name': name.text.trim(), 'bank_no': no.text.trim(), 'bank_owner': owner.text.trim()};
+  Map<String, String> toJson() => {'bank_name': name.text.trim(), 'bank_no': no.text.trim(), 'bank_owner': owner.text.trim()};
   void dispose() {
     name.dispose();
     no.dispose();

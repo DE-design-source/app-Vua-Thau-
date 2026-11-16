@@ -41,24 +41,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   void choose() => run('gg', () async {
-        final x = await pickGoogle();
+        final picked = await pickGoogle();
+        if (picked == null) return;
+        final x = await googleSignIn(picked); // Google này đã có tài khoản: vào luôn (trả null)
         if (x == null) return;
-        final j = await api('/dang-nhap-google', {'id_token': x.idToken});
-        if (j['token'] is String) return signedIn(j); // Google này đã có tài khoản: vào luôn
         pendingGoogle = x;
+        if (!mounted) return;
         setState(() => g = x);
         if (name.text.isEmpty) name.text = x.name;
       });
 
   void submit() => run('go', () async {
-        final j = await api('/dang-ky', {
+        final j = await post('/auth/register', {
           if (g != null) 'id_token': g!.idToken,
           'name': name.text.trim(),
           'phone': phone.text.trim(),
-          'pw': pw.text,
-          ...bank.toForm(),
+          'password': pw.text,
+          ...bank.toJson(),
         });
-        if (j['token'] is String) pendingGoogle = null;
         await signedIn(j);
       });
 

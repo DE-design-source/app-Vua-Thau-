@@ -1,4 +1,4 @@
-// AI kiểm từng ảnh ngay lúc vừa chụp/chọn (/api/kiem-anh), chưa đưa vào hồ sơ: giờ chụp, vị trí, ảnh trùng, có phải công trình.
+// AI kiểm từng ảnh ngay lúc vừa chụp/chọn (POST /photos/check), chưa đưa vào hồ sơ: giờ chụp, vị trí, ảnh trùng, có phải công trình.
 // Máy chủ lưu kết quả theo file: lúc tải lên đúng file đó thì không đọc lại, không tốn thêm.
 import 'dart:convert';
 
@@ -29,13 +29,13 @@ class Checks extends ChangeNotifier {
 
   void run(String path, {Object? meta, String name = 'anh.jpg', String mime = 'image/jpeg'}) {
     _put(path, const Check(CheckState.dang, 'AI đang kiểm tra…'));
-    upload('/api/kiem-anh', [UpFile('file', path, name, mime)], fields: {if (meta != null) 'meta': jsonEncode(meta)}).then((j) {
+    upload('/photos/check', [UpFile('file', path, name, mime)], fields: {if (meta != null) 'meta': jsonEncode(meta)}).then((j) {
       final problems = (j['problems'] as List?)?.map((e) => '$e').toList() ?? const [];
       _put(
           path,
           problems.isNotEmpty
               ? Check(CheckState.bad, problems.join(' · '))
-              : Check(CheckState.ok, j['ai'] == true || (j['ai'] != null && j['ai'] != false && j['ai'] != 0) ? 'Đạt' : 'Đạt, AI xem lại khi tải lên'));
+              : Check(CheckState.ok, j['ai'] == true ? 'Đạt' : 'Đạt, AI xem lại khi tải lên'));
     }, onError: (_) => _put(path, const Check(CheckState.loi, 'Chưa kiểm được, sẽ kiểm khi tải lên')));
   }
 

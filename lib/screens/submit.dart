@@ -1,4 +1,4 @@
-// Nộp hồ sơ mới (như /nha/moi): chụp bằng camera Vua Thầu, hoặc chọn ảnh có sẵn.
+// Nộp hồ sơ mới (POST /houses): chụp bằng camera Vua Thầu, hoặc chọn ảnh có sẵn.
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -54,12 +54,12 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
           ),
           const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('hoặc', textAlign: TextAlign.center, style: T.muted)),
           PhotoPicker(
-            path: '/nha',
+            path: '/houses',
             have: 0,
             valid: 0,
             title: 'Chọn ảnh có sẵn trong máy',
-            onUploaded: (url) {
-              final id = houseIdOf(url);
+            onUploaded: (j) {
+              final id = houseIdOf(j);
               if (id != null) push(context, HouseScreen(id: id));
             },
           ),
@@ -80,10 +80,11 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
   }
 }
 
-/// "/nha/123#anh" -> 123; "/nha/moi" hoặc url khác -> null
-int? houseIdOf(String url) {
-  final m = RegExp(r'^/nha/(\d+)').firstMatch(url);
-  return m == null ? null : int.parse(m.group(1)!);
+/// Kết quả POST /houses: {house_id: 123} -> 123; house_id null (không ảnh nào được nhận) -> null
+int? houseIdOf(Json j) {
+  final v = j['house_id'];
+  final id = v is num ? v.toInt() : int.tryParse('${v ?? ''}');
+  return id != null && id > 0 ? id : null;
 }
 
 class _Tip extends StatelessWidget {

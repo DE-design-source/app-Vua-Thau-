@@ -1,4 +1,4 @@
-// Tài khoản (như /toi): tài khoản nhận tiền, đổi mật khẩu, quy tắc, xoá tài khoản, đăng xuất.
+// Tài khoản (GET /me): tài khoản nhận tiền, đổi mật khẩu, quy tắc, xoá tài khoản, đăng xuất.
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -16,7 +16,7 @@ class AccountScreen extends StatefulWidget {
 
 class _AccountScreenState extends State<AccountScreen> with PageData {
   @override
-  String get path => '/toi';
+  String get path => '/me';
   @override
   bool get watchRoute => false;
 
@@ -39,6 +39,8 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
 
   @override
   void onData(Json j) {
+    if (j['user'] is Map) me.value = (j['user'] as Map).cast<String, dynamic>();
+    if (j['todo'] is num) badge.value = (j['todo'] as num).toInt();
     if (!_first) return; // giữ những gì CTV đang gõ dở khi tải lại
     _first = false;
     final b = (j['bank'] as Map?) ?? const {};
@@ -57,12 +59,12 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
     super.dispose();
   }
 
-  Future<void> post(String what, String p, Map<String, String> body, [VoidCallback? after]) async {
+  Future<void> save(String what, String p, Map<String, String> body, [void Function(Json)? after]) async {
     setState(() => op = what);
     try {
-      final j = await api(p, body);
+      final j = await put(p, body);
       toast(msgsOf(j));
-      after?.call();
+      after?.call(j);
       load();
     } catch (e) {
       toast(errMsg(e));
@@ -77,13 +79,15 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
     }
   }
 
-  /// CH Play bắt buộc: CTV tự xoá tài khoản ngay trong app. Xong thì máy chủ trả url /login, app tự đăng xuất.
+  /// CH Play bắt buộc: CTV tự xoá tài khoản ngay trong app. Xong thì đăng xuất.
   Future<void> removeAccount(int owed) async {
     final ok = await confirm(context,
         title: 'Xoá vĩnh viễn tài khoản?', text: '${owed > 0 ? 'Bạn sẽ mất ${money(owed)} chưa được trả. ' : ''}Không khôi phục được.', ok: 'Xoá tài khoản');
     if (!ok) return;
     try {
-      await api('/toi/xoa', {});
+      final j = await delete('/me');
+      await setToken(null); // màn gốc tự về đăng nhập
+      toast(msgsOf(j));
     } catch (e) {
       if (loggedIn()) toast(errMsg(e));
     }
@@ -109,8 +113,9 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
   Widget _body(Json d) {
     final user = (d['user'] as Map?) ?? const {};
     final b = (d['bank'] as Map?) ?? const {};
-    final hasOwed = d.containsKey('owed') && d['owed'] != null;
-    final owed = asInt(d['owed']);
+    final m = d['money'] as Map?;
+    final hasOwed = m != null; // money chỉ có với CTV
+    final owed = asInt(m?['owed']);
     final min = cfg.minPhotos;
     final rules = <(String, String)>[
       ('image', 'Mỗi căn nhà: $min ảnh đạt = ${money(cfg.payFor(min))}, từ ${min + 1} ảnh = ${money(cfg.payFor(min + 1))}. Dưới $min ảnh không gửi được.'),
@@ -130,7 +135,7 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(str(user['name']), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: C.text)),
-                Text('${str(user['phone'])} · Cộng tác viên', style: T.muted),
+                Text('${str(user['username'])} · Cộng tác viên', style: T.muted),
                 if (str(user['email']).isNotEmpty) Text('Google: ${str(user['email'])}', style: T.muted),
               ]),
             ),
@@ -141,7 +146,7 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
           if (str(b['owner']).isEmpty && str(user['bank']).isNotEmpty)
             Text('Đang lưu: “${str(user['bank'])}”. Nhập lại theo 3 ô dưới để kế toán chuyển nhanh, đúng.', style: T.muted.copyWith(color: C.warn)),
           BankFields(c: bank!),
-          Btn('Lưu tài khoản', kind: BtnKind.dark, busy: op == 'bank', onPressed: () => post('bank', '/toi/ngan-hang', bank!.toForm())),
+          Btn('Lưu tài khoản', kind: BtnKind.dark, busy: op == 'bank', onPressed: () => save('bank', '/me/bank', bank!.toJson())),
         ]),
         const SizedBox(height: 12),
         _fold('pw', 'lock', 'Đổi mật khẩu', [
@@ -151,7 +156,9 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
               kind: BtnKind.dark,
               busy: op == 'pw',
               disabled: pwOld.text.isEmpty || pwNew.text.length < 6,
-              onPressed: () => post('pw', '/toi/mat-khau', {'old': pwOld.text, 'new': pwNew.text}, () {
+              onPressed: () => save('pw', '/me/password', {'old': pwOld.text, 'new': pwNew.text}, (j) {
+                    // token cũ hết hiệu lực: dùng token mới máy chủ trả
+                    if (j['access_token'] is String) setToken(j['access_token'] as String);
                     pwOld.clear();
                     pwNew.clear();
                   })),
@@ -164,7 +171,6 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
               Expanded(child: Text(t, style: const TextStyle(color: C.text, height: 1.4))),
             ]),
         ]),
-        // máy chủ bản cũ (chưa có /toi/xoa) không gửi owed: ẩn mục này để không bấm ra lỗi
         if (hasOwed) ...[
           const SizedBox(height: 12),
           _fold('del', 'trash', 'Xoá tài khoản', [

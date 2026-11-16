@@ -84,11 +84,38 @@ String money(num? n) {
   return '${v < 0 ? '-' : ''}$sđ';
 }
 
-/// "2026-11-06 12:54:53" -> "06/11/2026"
-String vnDate(String? s) => s != null && s.length >= 10 ? '${s.substring(8, 10)}/${s.substring(5, 7)}/${s.substring(0, 4)}' : '';
+final _ts = RegExp(r'^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$');
 
-/// "2026-11-06 12:54:53" -> "12:54 06/11/2026"
-String vnTime(String? s) => s != null && s.length >= 16 ? '${s.substring(11, 16)} ${vnDate(s)}' : (s ?? '');
+/// Tách ngày giờ máy chủ: RFC 3339 ("2026-11-13T14:13:05+07:00") hoặc "YYYY-MM-DD HH:MM[:SS]".
+/// Có múi giờ khác +07:00 thì đổi sang giờ Việt Nam. Trả [năm, tháng, ngày, giờ?, phút?].
+List<String?>? _vnParts(String? s) {
+  final t = (s ?? '').trim();
+  final m = _ts.firstMatch(t);
+  if (m == null) return null;
+  final zone = m.group(6);
+  if (zone != null && m.group(4) != null && zone != '+07:00' && zone != '+0700') {
+    final dt = DateTime.tryParse(t);
+    if (dt != null) {
+      final v = dt.toUtc().add(const Duration(hours: 7));
+      String p(int n) => n.toString().padLeft(2, '0');
+      return ['${v.year}', p(v.month), p(v.day), p(v.hour), p(v.minute)];
+    }
+  }
+  return [m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)];
+}
+
+/// "2026-11-13T14:13:05+07:00" hoặc "2026-11-06 12:54" -> "06/11/2026"
+String vnDate(String? s) {
+  final p = _vnParts(s);
+  return p == null ? '' : '${p[2]}/${p[1]}/${p[0]}';
+}
+
+/// "2026-11-13T14:13:05+07:00" -> "14:13 13/11/2026"; "2026-11-06 12:54" -> "12:54 06/11/2026"
+String vnTime(String? s) {
+  final p = _vnParts(s);
+  if (p == null) return s ?? '';
+  return p[3] == null ? vnDate(s) : '${p[3]}:${p[4]} ${p[2]}/${p[1]}/${p[0]}';
+}
 
 String initials(String? name) {
   final w = (name ?? '?').trim().split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();

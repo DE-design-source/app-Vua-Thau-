@@ -1,4 +1,4 @@
-// Thu nhập (như /thu-nhap): tổng tiền, lần thanh toán tới, tài khoản nhận tiền, lịch sử nhận tiền.
+// Thu nhập (GET /ctv/income): tổng tiền, lần thanh toán tới, tài khoản nhận tiền, lịch sử nhận tiền.
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -15,7 +15,7 @@ class IncomeScreen extends StatefulWidget {
 
 class _IncomeScreenState extends State<IncomeScreen> with PageData {
   @override
-  String get path => '/thu-nhap';
+  String get path => '/ctv/income';
   @override
   bool get watchRoute => false;
 
@@ -33,11 +33,11 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
   }
 
   Widget _body(Json d) {
-    final m = d['m'] as Json;
+    final m = (d['money'] as Map?) ?? const {};
     final approved = asInt(m['approved']), owed = asInt(m['owed']);
     final bank = (d['bank'] as Map?) ?? const {};
-    final user = (d['user'] as Map?) ?? const {};
-    final adj = (d['adj'] as List?)?.cast<Json>() ?? const <Json>[];
+    final userBank = str(d['user_bank']);
+    final adj = (d['adjustments'] as List?)?.cast<Json>() ?? const <Json>[];
     final pays = (d['pays'] as List?)?.cast<Json>() ?? const <Json>[];
     final hasBank = str(bank['owner']).isNotEmpty;
 
@@ -69,7 +69,7 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
                     Text(
                       hasBank
                           ? '${str(bank['no'])} · ${str(bank['owner'])}'
-                          : (str(user['bank']).isNotEmpty ? str(user['bank']) : 'Chưa có, bấm để thêm'),
+                          : (userBank.isNotEmpty ? userBank : 'Chưa có, bấm để thêm'),
                       style: T.muted,
                     ),
                   ]),
@@ -96,7 +96,7 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
                           Text('Nhận ${money(asInt(pays[k]['total']))}', style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
                           Text(
-                            '${vnDate(str(pays[k]['created_at']))} · ${asInt(pays[k]['n'])} hồ sơ${str(pays[k]['note']).isNotEmpty ? ' · ${str(pays[k]['note'])}' : ''}',
+                            '${vnDate(str(pays[k]['created_at']))} · ${asInt(pays[k]['house_count'])} hồ sơ${str(pays[k]['ref']).isNotEmpty ? ' · ${str(pays[k]['ref'])}' : ''}',
                             style: T.muted,
                           ),
                         ]),

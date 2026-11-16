@@ -122,7 +122,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   // GPS + địa chỉ (máy chủ hỏi OpenStreetMap / Google, như web)
   Future<void> _lookup(Pos p) async {
     try {
-      final j = await api('/api/vi-tri?lat=${p.lat}&lng=${p.lng}');
+      final j = await api('/geocode?lat=${p.lat}&lng=${p.lng}');
       if (mounted) setState(() => addr = str(j['address']));
     } catch (_) {/* mất mạng: ảnh vẫn có toạ độ */}
   }
@@ -217,7 +217,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     });
     try {
       final j = await upload(
-        widget.hid > 0 ? '/nha/${widget.hid}/anh' : '/nha',
+        widget.hid > 0 ? '/houses/${widget.hid}/photos' : '/houses',
         [for (var k = 0; k < shots.length; k++) UpFile('files', shots[k].path, 'vuathau-${k + 1}.jpg')],
         fields: {'meta': jsonEncode([for (final s in shots) s.meta])},
         onProgress: (p) {
@@ -225,14 +225,14 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         },
       );
       toast(msgsOf(j));
-      final url = str(j['url']);
-      if (url == '/nha/moi') {
+      final id = houseIdOf(j);
+      // hồ sơ mới: house_id null; hồ sơ có sẵn: added = 0
+      if (widget.hid > 0 ? j.containsKey('added') && asInt(j['added']) == 0 : id == null) {
         setState(() => err = 'Không ảnh nào được nhận, xem lý do ở trên.');
         return;
       }
       shots.clear();
       if (!mounted) return;
-      final id = houseIdOf(url);
       if (widget.hid > 0 || id == null) {
         Navigator.of(context).pop(true);
       } else {

@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 
 import 'api.dart';
-import 'toast.dart';
 
 final routeObserver = RouteObserver<ModalRoute<void>>();
 
@@ -27,8 +26,7 @@ mixin PageData<W extends StatefulWidget> on State<W> implements Reloadable, Rout
     if (!mounted) return;
     setState(() => busy = true);
     try {
-      final j = await api(path);
-      toast(msgsOf(j));
+      final j = await api(path); // GET chỉ trả dữ liệu; câu báo chỉ có ở thao tác ghi
       if (!mounted) return;
       setState(() {
         d = j;

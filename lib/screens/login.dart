@@ -45,21 +45,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void byPassword() {
     if (phone.text.isEmpty || pw.text.isEmpty || busy.isNotEmpty) return;
-    run('pw', () async => signedIn(await api('/login', {'phone': phone.text.trim(), 'pw': pw.text})));
+    run('pw', () async => signedIn(await post('/auth/login', {'login': phone.text.trim(), 'password': pw.text})));
   }
 
   void byGoogle() => run('gg', () async {
-        final g = await pickGoogle();
-        if (g == null) return;
-        final j = await api('/dang-nhap-google', {'id_token': g.idToken});
-        if (j['url'] == '/dang-ky') {
+        final picked = await pickGoogle();
+        if (picked == null) return;
+        final g = await googleSignIn(picked);
+        if (g != null) {
           // Google này chưa có tài khoản: sang đăng ký, điền sẵn tên + email
           pendingGoogle = g;
           toast('${g.email} chưa đăng ký. Điền thêm số điện thoại, mật khẩu, ngân hàng để tạo tài khoản.');
           if (mounted) push(context, const RegisterScreen());
-          return;
         }
-        await signedIn(j);
       });
 
   @override

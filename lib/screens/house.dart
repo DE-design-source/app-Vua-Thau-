@@ -1,4 +1,4 @@
-// 1 hồ sơ (như /nha/{id}): phản hồi AI, ảnh, tiền, thông tin công trình, tiến trình, lịch sử. CTV sửa và gửi duyệt ở đây.
+// 1 hồ sơ (GET /houses/{id}): phản hồi AI, ảnh, tiền, thông tin công trình, tiến trình, lịch sử. CTV sửa và gửi duyệt ở đây.
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -23,7 +23,7 @@ class HouseScreen extends StatefulWidget {
 
 class _HouseScreenState extends State<HouseScreen> with PageData {
   @override
-  String get path => '/nha/${widget.id}';
+  String get path => '/houses/${widget.id}';
 
   final ctl = {for (final k in _form) k: TextEditingController()};
   String stage = '';
@@ -32,7 +32,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
   bool showLog = false;
   Timer? poll;
 
-  bool get reading => d != null && (d!['h'] as Map)['ai_state'] == 'dang_doc';
+  bool get reading => d != null && (d!['house'] as Map)['ai_state'] == 'dang_doc';
 
   @override
   void initState() {
@@ -50,7 +50,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
   // Dữ liệu mới từ máy chủ: giữ nguyên ô CTV đang gõ dở, ô khác lấy giá trị mới (vd AI vừa đọc xong)
   @override
   void onData(Json j) {
-    final h = j['h'] as Map;
+    final h = j['house'] as Map;
     _filling = true;
     for (final k in _form) {
       if (k == 'stage' || touched.contains(k)) continue;
@@ -68,7 +68,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
     if (reading && poll == null) {
       poll = Timer.periodic(const Duration(seconds: 3), (_) async {
         try {
-          final j = await api('/nha/${widget.id}/trang-thai');
+          final j = await api('/houses/${widget.id}/state');
           if (j['ai_state'] != 'dang_doc') {
             poll?.cancel();
             poll = null;
@@ -91,12 +91,17 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
     super.dispose();
   }
 
+  /// action: luu (lưu nháp) | gui (gửi duyệt)
   Future<void> save(String action) async {
     setState(() => busy2 = action);
     try {
-      final j = await api('/nha/${widget.id}', {
-        for (final k in _form) k: k == 'stage' ? stage : ctl[k]!.text,
-        'action': action,
+      final j = await put('/houses/${widget.id}', {
+        'address': ctl['address']!.text,
+        'floors': int.tryParse(ctl['floors']!.text.trim()),
+        'stage': stage,
+        'contractor_name': ctl['contractor_name']!.text,
+        'contractor_phone': ctl['contractor_phone']!.text,
+        'submit': action == 'gui',
       });
       toast(msgsOf(j));
       touched.clear();
@@ -111,7 +116,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
   Future<void> del(Json p, int n) async {
     if (!await confirm(context, title: 'Xoá ảnh $n khỏi hồ sơ?', ok: 'Xoá')) return;
     try {
-      final j = await api('/nha/${widget.id}/anh/${asInt(p['id'])}/xoa', {});
+      final j = await delete('/houses/${widget.id}/photos/${asInt(p['id'])}');
       toast(msgsOf(j));
       load();
     } catch (e) {
@@ -125,18 +130,22 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
     if (d == null) {
       return Scaffold(body: Column(children: [VtAppBar(title: 'Hồ sơ #${widget.id}', back: true), Expanded(child: Loading(err: err, retry: load))]));
     }
-    final h = (d['h'] as Map).cast<String, dynamic>();
-    final ps = (d['ps'] as List).cast<Json>();
+    final h = (d['house'] as Map).cast<String, dynamic>();
+    final ps = (d['photos'] as List?)?.cast<Json>() ?? const <Json>[];
     final editable = d['editable'] == true;
-    final todo = (d['todo'] as List?)?.cast<List>() ?? const <List>[];
-    final issues = (d['issues'] as List?)?.cast<List>() ?? const <List>[];
-    final aiTag = (d['ai_tag'] as List?)?.map((e) => '$e').toList() ?? const <String>[];
+    final todo = (d['todo'] as List?)?.map((e) => '$e').toList() ?? const <String>[];
+    final checklist = (d['checklist'] as List?)?.cast<Map>() ?? const <Map>[];
+    final issues = (d['issues'] as List?)?.cast<Map>() ?? const <Map>[];
+    final aiTag = (d['ai_fields'] as List?)?.map((e) => '$e').toList() ?? const <String>[];
     final badFields = (d['bad_fields'] as List?)?.map((e) => '$e').toList() ?? const <String>[];
     final steps = (d['steps'] as List?)?.cast<Json>() ?? const <Json>[];
     final logs = (d['logs'] as List?)?.cast<Json>() ?? const <Json>[];
     final valid = asInt(d['valid']), pay = asInt(d['pay']);
     final status = str(h['status']);
-    final fieldsTodo = editable ? todo.where((t) => t[0] != 'anh').toList() : const <List>[];
+    // ô thông tin còn thiếu / sai (mục ảnh hiện riêng ở dòng "Cần thêm n ảnh đạt")
+    final fieldsTodo = editable
+        ? [for (final c in checklist) if (c['ok'] != true && c['key'] != 'anh') str(c['message']).isNotEmpty ? str(c['message']) : str(c['label'])]
+        : const <String>[];
     final clean = issues.isEmpty && fieldsTodo.isEmpty;
     final ready = editable && todo.isEmpty && !reading;
     final shown = status == 'tu_choi' ? 0 : editable ? pay : asInt(h['amount']);
@@ -198,9 +207,9 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                           _Line(
                               icon: 'image',
                               color: C.bad,
-                              text: 'Ảnh ${it[0]}: ${(it[1] as List).join('; ')}${editable ? ' — xoá và chụp lại' : ''}'),
+                              text: 'Ảnh ${asInt(it['index'])}: ${((it['problems'] as List?) ?? const []).join('; ')}${editable ? ' — xoá và chụp lại' : ''}'),
                         if (editable && valid < min) _Line(icon: 'x', color: C.bad, text: 'Cần thêm ${min - valid} ảnh đạt (tối thiểu $min)'),
-                        for (final t in fieldsTodo) _Line(icon: 'x', color: C.bad, text: str(t[3])),
+                        for (final t in fieldsTodo) _Line(icon: 'x', color: C.bad, text: t),
                         if (editable && clean) const _Line(icon: 'check', color: C.ok, text: 'Đủ ảnh và thông tin. Bấm Gửi duyệt bên dưới.'),
                       ]),
 
@@ -214,7 +223,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                   Btn('Chụp thêm bằng camera',
                       icon: 'camera', kind: BtnKind.dark, onPressed: () => push(context, CameraScreen(hid: widget.id, have: ps.length))),
                   PhotoPicker(
-                    path: '/nha/${widget.id}/anh',
+                    path: '/houses/${widget.id}/photos',
                     have: ps.length,
                     valid: valid,
                     onUploaded: (_) => load(),
@@ -289,7 +298,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                           Text(vnTime(str(l['at'])), style: T.muted),
                           Text.rich(TextSpan(style: const TextStyle(color: C.text), children: [
                             TextSpan(text: str(l['action']), style: const TextStyle(fontWeight: FontWeight.w700)),
-                            TextSpan(text: ' · ${str(l['name'])}'),
+                            TextSpan(text: ' · ${str(l['user_name'])}'),
                           ])),
                           if (str(l['note']).isNotEmpty) Text(str(l['note']), style: T.muted),
                         ]),

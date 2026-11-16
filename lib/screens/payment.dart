@@ -1,4 +1,4 @@
-// 1 lần nhận tiền (như /dot/{id} của web): số tiền, mã giao dịch, ảnh biên lai kế toán gửi, hồ sơ được trả, thưởng / trừ.
+// 1 lần nhận tiền (GET /batches/{id}): số tiền, mã giao dịch, ảnh biên lai kế toán gửi, hồ sơ được trả, thưởng / trừ.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -16,7 +16,7 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> with PageData {
   @override
-  String get path => '/dot/${widget.id}';
+  String get path => '/batches/${widget.id}';
 
   @override
   Widget build(BuildContext context) {
@@ -24,11 +24,12 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
     if (d == null) {
       return Scaffold(body: Column(children: [VtAppBar(title: 'Phiếu chi #${widget.id}', back: true), Expanded(child: Loading(err: err, retry: load))]));
     }
-    final b = (d['b'] as Map).cast<String, dynamic>();
+    final b = (d['batch'] as Map).cast<String, dynamic>();
     final rows = (d['rows'] as List?)?.cast<Json>() ?? const <Json>[];
-    final adjs = (d['adjs'] as List?)?.cast<Json>() ?? const <Json>[];
-    final stats = (d['stats'] as Map?) ?? const {};
-    final receipt = str(b['receipt']).isNotEmpty ? '$base/dot/${b['id']}/bien-lai?v=${b['receipt']}' : null;
+    final adjs = (d['adjustments'] as List?)?.cast<Json>() ?? const <Json>[];
+    final receipt = b['has_receipt'] == true
+        ? '$base/batches/${b['id']}/receipt?v=${Uri.encodeQueryComponent(str(b['receipt_version']))}'
+        : null;
 
     return Scaffold(
       body: Column(children: [
@@ -49,7 +50,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
             const SizedBox(height: 12),
             Box(gap: 14, children: [
               _Fact('Tài khoản nhận', str(b['ctv_bank'])),
-              _Fact('Mã giao dịch', str(b['note']).isNotEmpty ? str(b['note']) : 'Kế toán không ghi'),
+              _Fact('Mã giao dịch', str(b['ref']).isNotEmpty ? str(b['ref']) : 'Kế toán không ghi'),
               _Fact('Kế toán chuyển', str(b['by_name'])),
             ]),
             const SizedBox(height: 12),
@@ -104,7 +105,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
             const Sec('Hồ sơ được trả lần này'),
             const SizedBox(height: 12),
             Box(padding: EdgeInsets.zero, gap: 0, children: [
-              for (var k = 0; k < rows.length; k++) _row(rows[k], stats['${rows[k]['id']}'] as Map?, k > 0),
+              for (var k = 0; k < rows.length; k++) _row(rows[k], k > 0),
             ]),
           ]),
         ),
@@ -112,8 +113,9 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
     );
   }
 
-  Widget _row(Json r, Map? st, bool top) {
+  Widget _row(Json r, bool top) {
     final id = asInt(r['id']);
+    final cover = r['cover_id'];
     return Tap(
       top: top,
       padding: const EdgeInsets.all(12),
@@ -124,8 +126,8 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
           child: SizedBox(
             width: 48,
             height: 48,
-            child: st?['cover'] != null
-                ? NetPhoto.id(asInt(st!['cover']), width: 48, height: 48)
+            child: cover != null
+                ? NetPhoto.id(asInt(cover), width: 48, height: 48)
                 : Container(color: C.line, alignment: Alignment.center, child: const Ic('image', color: C.muted)),
           ),
         ),
@@ -133,7 +135,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
             Text(str(r['address']).isNotEmpty ? str(r['address']) : 'Hồ sơ #$id',
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, color: C.text)),
-            Text('#$id${st != null ? ' · ${asInt(st['valid'])}/${asInt(st['n'])} ảnh đạt' : ''}', style: T.muted),
+            Text('#$id${r['photos_total'] != null ? ' · ${asInt(r['photos_valid'])}/${asInt(r['photos_total'])} ảnh đạt' : ''}', style: T.muted),
           ]),
         ),
         Text(money(asInt(r['amount'])), style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
