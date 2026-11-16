@@ -16,7 +16,7 @@ import 'house.dart';
 const _vn = LatLng(16.0, 106.2);
 
 // Công trình theo lần chụp: chưa quá số ngày chặn trùng vàng nhạt, quá thì xanh lá (cần cập nhật, được chụp lại)
-const ageFresh = Color(0xFFFCE38A), ageFreshLine = Color(0xFFB7791F), ageStale = Color(0xFF16A34A);
+const ageFresh = Color(0xFFFCE38A), ageFreshLine = Color(0xFFB7791F), ageStale = Color(0xFF22C55E); // xanh lá tươi
 const _radii = [500, 1000, 2000, 5000];
 
 class MapScreen extends StatefulWidget {
@@ -412,8 +412,9 @@ class _MapScreenState extends State<MapScreen> with PageData {
   }
 
   Widget _filterBox(int days) {
-    final opts = <(String, String, Color, Color, int)>[
-      ('all', 'Xem tất cả công trình', C.navy3, Colors.white, mine.length + others.length),
+    // màu null: không có chấm (Xem tất cả)
+    final opts = <(String, String, Color?, Color, int)>[
+      ('all', 'Xem tất cả công trình', null, Colors.white, mine.length + others.length),
       ('mine', 'Công trình của bạn', C.wait, Colors.white, mine.length),
       ('fresh', 'Cập nhật chưa quá $days ngày', ageFresh, ageFreshLine, _n(true)),
       ('stale', 'Quá $days ngày: cần cập nhật', ageStale, Colors.white, _n(false)),
@@ -470,12 +471,16 @@ class _MapScreenState extends State<MapScreen> with PageData {
     ]);
   }
 
-  Widget _legend(Color c, String text, {bool big = false, Color line = Colors.white}) => Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
-        Container(
-          width: big ? 12 : 10,
-          height: big ? 12 : 10,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: line, width: big ? 2 : 1)),
-        ),
+  // Chấm màu 20px (to gấp đôi); c = null: chừa chỗ trống cho thẳng hàng chữ
+  Widget _legend(Color? c, String text, {Color line = Colors.white}) => Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
+        if (c == null)
+          const SizedBox(width: 20, height: 20)
+        else
+          Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: line == Colors.white ? Colors.black12 : line, width: 1.5)),
+          ),
         Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: C.text))),
       ]);
 }
