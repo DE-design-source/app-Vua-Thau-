@@ -5,7 +5,7 @@ Admin và kế toán dùng **web**; app và web dùng chung một máy chủ nê
 
 App viết lại giao diện và chức năng của bản Expo trong `vuathau-nghiemthu/mobile`. Máy chủ là **backend Go** trong repo
 `DE-design-source/VuaThau` (thư mục `backend`), dùng chung với web quản lý của admin và kế toán. App gọi API REST
-`https://nghiemthu.vuathau.com.vn/api/v1`:
+`https://map.vuathau.com.vn/api/v1`:
 
 - Mọi response là envelope `{"success": true, "data": ...}` hoặc `{"success": false, "error": "..."}`; app trả `data`, báo `error`.
 - Đăng nhập (`POST /auth/login`, `/auth/register`, `/auth/google`) trả JWT; app lưu bằng flutter_secure_storage và gửi

@@ -14,7 +14,7 @@ import 'toast.dart';
 
 /// Đổi máy chủ khi build: flutter build apk --dart-define=API_URL=https://...
 /// (máy ảo Android gọi backend chạy trên máy tính: http://10.0.2.2:8080)
-const host = String.fromEnvironment('API_URL', defaultValue: 'https://nghiemthu.vuathau.com.vn');
+const host = String.fromEnvironment('API_URL', defaultValue: 'https://map.vuathau.com.vn');
 const base = '$host/api/v1';
 
 typedef Json = Map<String, dynamic>;
