@@ -200,7 +200,7 @@ class _ShootItem extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: C.amber,
                   shape: BoxShape.circle,
-                  border: Border.all(color: on ? C.navy : Colors.white, width: 3),
+                  border: Border.all(color: Colors.white, width: 3),
                   boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2))],
                 ),
                 child: const Icon(Icons.photo_camera, color: C.navy, size: 28),

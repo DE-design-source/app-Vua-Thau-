@@ -103,6 +103,14 @@ class _MapScreenState extends State<MapScreen> with PageData {
   List<Json> get mine => ((d?['mine'] as List?) ?? const []).cast<Json>();
   List<Json> get others => ((d?['others'] as List?) ?? const []).cast<Json>();
 
+  // Lọc công trình: all = tất cả, mine = của bạn, fresh = cập nhật chưa quá hạn, stale = quá hạn cần cập nhật
+  String filter = 'all';
+  bool filterOpen = false;
+  bool _keep(Json o) => switch (filter) { 'fresh' => o['recent'] == true, 'stale' => o['recent'] != true, _ => true };
+  List<Json> get shownMine => [for (final p in mine) if (_keep(p)) p];
+  List<Json> get shownOthers => filter == 'mine' ? const [] : [for (final o in others) if (_keep(o)) o];
+  int _n(bool recent) => [...mine, ...others].where((o) => (o['recent'] == true) == recent).length;
+
   @override
   void onData(Json j) => _fit();
 
@@ -217,7 +225,7 @@ class _MapScreenState extends State<MapScreen> with PageData {
               // Công trình CTV khác: chỉ chấm (không chi tiết). Vàng nhạt: chụp chưa quá hạn (chụp lại sẽ bị chặn trùng);
               // xanh lá: quá hạn, cần cập nhật công trình (được chụp lại)
               CircleLayer(circles: [
-                for (final o in others)
+                for (final o in shownOthers)
                   CircleMarker(
                     point: LatLng((o['lat'] as num).toDouble(), (o['lng'] as num).toDouble()),
                     radius: 6,
@@ -227,7 +235,7 @@ class _MapScreenState extends State<MapScreen> with PageData {
                   ),
               ]),
               MarkerLayer(markers: [
-                for (final p in mine)
+                for (final p in shownMine)
                   Marker(
                     point: LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()),
                     width: 30,
@@ -267,23 +275,21 @@ class _MapScreenState extends State<MapScreen> with PageData {
                     ),
                   ),
               ]),
-              const SimpleAttributionWidget(source: Text('OpenStreetMap')),
+              // Ghi nguồn bản đồ (gọn, không tràn trên máy màn hẹp)
+              const Align(
+                alignment: Alignment.bottomRight,
+                child: ColoredBox(
+                  color: Color(0xCCFFFFFF),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    child: Text('© OpenStreetMap', style: TextStyle(fontSize: 10.5, color: C.muted)),
+                  ),
+                ),
+              ),
             ],
           ),
-          // Chú thích
-          Positioned(
-            left: 10,
-            bottom: 24,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(color: Colors.white.withValues(alpha: .94), borderRadius: BorderRadius.circular(R.card), border: Border.all(color: C.line)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
-                _legend(C.navy3, 'Công trình của bạn (${mine.length})', big: true),
-                _legend(ageFresh, 'Người khác chụp chưa quá ${dup > 0 ? dup : 30} ngày', line: ageFreshLine),
-                _legend(ageStale, 'Quá ${dup > 0 ? dup : 30} ngày: cần cập nhật công trình'),
-              ]),
-            ),
-          ),
+          // Lọc công trình (kiêm chú thích màu)
+          Positioned(left: 10, right: 64, bottom: 24, child: Align(alignment: Alignment.bottomLeft, child: _filterBox(dup > 0 ? dup : 30))),
           // Ô tìm địa điểm + kết quả + số công trình trong vòng
           Positioned(left: 10, right: 10, top: 10, child: _searchBox()),
           if (busy && d == null) const Center(child: CircularProgressIndicator()),
@@ -405,12 +411,71 @@ class _MapScreenState extends State<MapScreen> with PageData {
     ]);
   }
 
+  Widget _filterBox(int days) {
+    final opts = <(String, String, Color, Color, int)>[
+      ('all', 'Xem tất cả công trình', C.navy3, Colors.white, mine.length + others.length),
+      ('mine', 'Công trình của bạn', C.wait, Colors.white, mine.length),
+      ('fresh', 'Cập nhật chưa quá $days ngày', ageFresh, ageFreshLine, _n(true)),
+      ('stale', 'Quá $days ngày: cần cập nhật', ageStale, Colors.white, _n(false)),
+    ];
+    final cur = opts.firstWhere((o) => o.$1 == filter);
+    final box = BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(R.card),
+      border: Border.all(color: C.line),
+      boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 8, offset: Offset(0, 2))],
+    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, spacing: 6, children: [
+      if (filterOpen)
+        Container(
+          decoration: box,
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            for (final o in opts)
+              InkWell(
+                onTap: () => setState(() {
+                  filter = o.$1;
+                  filterOpen = false;
+                }),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  child: Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
+                    Icon(filter == o.$1 ? Icons.radio_button_checked : Icons.radio_button_unchecked, size: 18, color: filter == o.$1 ? C.navy : C.subtle),
+                    Flexible(child: _legend(o.$3, o.$2, line: o.$4)),
+                    Text('(${o.$5})', style: const TextStyle(fontSize: 12.5, color: C.muted)),
+                  ]),
+                ),
+              ),
+          ]),
+        ),
+      Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => setState(() => filterOpen = !filterOpen),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: box.copyWith(borderRadius: BorderRadius.circular(20)),
+            child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
+              const Icon(Icons.filter_alt_outlined, size: 18, color: C.navy),
+              Flexible(
+                child: Text(filter == 'all' ? 'Lọc công trình' : cur.$2,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.navy)),
+              ),
+              Icon(filterOpen ? Icons.expand_more : Icons.expand_less, size: 18, color: C.navy),
+            ]),
+          ),
+        ),
+      ),
+    ]);
+  }
+
   Widget _legend(Color c, String text, {bool big = false, Color line = Colors.white}) => Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
         Container(
           width: big ? 12 : 10,
           height: big ? 12 : 10,
           decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: line, width: big ? 2 : 1)),
         ),
-        Text(text, style: const TextStyle(fontSize: 12, color: C.text)),
+        Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: C.text))),
       ]);
 }
