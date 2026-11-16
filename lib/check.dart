@@ -77,14 +77,14 @@ class CheckBadge extends StatelessWidget {
         label: c.text,
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4), border: Border.all(color: fg.withValues(alpha: .25))),
           child: Row(spacing: 4, children: [
             if (c.state == CheckState.dang)
               const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: C.navy))
             else
               Ic(c.state == CheckState.ok ? 'check' : 'alert', color: fg, size: 13),
             Expanded(
-              child: Text(c.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: fg)),
+              child: Text(c.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
             ),
           ]),
         ),

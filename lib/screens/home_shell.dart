@@ -79,30 +79,35 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
       body: IndexedStack(index: i, children: [for (var k = 0; k < 4; k++) _tab(k)]),
       bottomNavigationBar: ValueListenableBuilder<int>(
         valueListenable: badge,
+        // Thanh tab phẳng: viền trên 1px, tab đang chọn có vạch vàng phía trên icon
         builder: (context, n, _) => NavigationBarTheme(
           data: NavigationBarThemeData(
+            height: 64,
             labelTextStyle: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-                ? const TextStyle(color: C.navy, fontWeight: FontWeight.w700, fontSize: 12)
-                : const TextStyle(color: C.muted, fontSize: 12)),
-            iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(color: s.contains(WidgetState.selected) ? C.navy : C.muted)),
+                ? const TextStyle(color: C.navy, fontWeight: FontWeight.w600, fontSize: 11.5)
+                : const TextStyle(color: C.subtle, fontSize: 11.5)),
+            iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(size: 22, color: s.contains(WidgetState.selected) ? C.navy : C.subtle)),
+            indicatorShape: const Border(top: BorderSide(color: C.amber, width: 3)),
           ),
-          child: NavigationBar(
+          child: Container(
+            decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.line))),
+            child: NavigationBar(
             selectedIndex: i,
             backgroundColor: Colors.white,
-            indicatorColor: C.amberBg,
+            indicatorColor: Colors.transparent,
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
             onDestinationSelected: (k) => tabIndex.value == k ? _reload() : tabIndex.value = k,
             destinations: [
               NavigationDestination(
                 icon: Badge(
                   isLabelVisible: n > 0,
-                  backgroundColor: const Color(0xFFE5484D),
+                  backgroundColor: C.bad,
                   label: Text(n > 99 ? '99+' : '$n'),
                   child: const Icon(Icons.home_outlined),
                 ),
                 selectedIcon: Badge(
                   isLabelVisible: n > 0,
-                  backgroundColor: const Color(0xFFE5484D),
+                  backgroundColor: C.bad,
                   label: Text(n > 99 ? '99+' : '$n'),
                   child: const Icon(Icons.home),
                 ),
@@ -113,6 +118,7 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
                   icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Thu nhập'),
               const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Tài khoản'),
             ],
+            ),
           ),
         ),
       ),

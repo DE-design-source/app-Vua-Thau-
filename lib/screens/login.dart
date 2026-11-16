@@ -65,17 +65,18 @@ class _LoginScreenState extends State<LoginScreen> {
     final gOn = googleOn();
     return Scaffold(
       body: ListView(padding: EdgeInsets.zero, keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag, children: [
-        const AuthTop(title: 'Vua Thầu Nghiệm thu', text: 'Chụp công trình, nhận tiền nhanh.'),
+        const AuthTop(title: 'Nghiệm thu công trình', text: 'Chụp công trình đang xây, AI kiểm ảnh, nhận tiền về tài khoản.'),
         Lift(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Box(padding: const EdgeInsets.all(20), gap: 16, children: [
+              const Text('ĐĂNG NHẬP', style: T.formHead),
               if (gOn) ...[
                 GoogleBtn(title: 'Đăng nhập bằng Google', onPressed: byGoogle, busy: busy == 'gg'),
-                const Row(spacing: 10, children: [
-                  Expanded(child: Divider(color: C.line, height: 1)),
-                  Text('hoặc dùng số điện thoại', style: T.muted),
-                  Expanded(child: Divider(color: C.line, height: 1)),
+                Row(spacing: 10, children: [
+                  const Expanded(child: Divider(color: C.line, height: 1)),
+                  Text('hoặc số điện thoại', style: T.hint.copyWith(color: C.subtle)),
+                  const Expanded(child: Divider(color: C.line, height: 1)),
                 ]),
               ],
               AutofillGroup(
@@ -118,10 +119,12 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
             child: Text.rich(
               TextSpan(text: 'Cộng tác viên mới? ', children: [
-                TextSpan(text: gOn ? 'Đăng ký bằng Google' : 'Đăng ký ngay', style: const TextStyle(fontWeight: FontWeight.w700, color: C.navy3)),
+                TextSpan(
+                    text: gOn ? 'Đăng ký bằng Google' : 'Đăng ký ngay',
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: C.navy, decoration: TextDecoration.underline, decorationColor: C.amber, decorationThickness: 2)),
               ]),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, color: C.text),
+              style: const TextStyle(fontSize: 14.5, color: C.muted),
             ),
           ),
         ),

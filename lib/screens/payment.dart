@@ -22,7 +22,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
   Widget build(BuildContext context) {
     final d = this.d;
     if (d == null) {
-      return Scaffold(body: Column(children: [VtAppBar(title: 'Phiếu chi #${widget.id}', back: true), Expanded(child: Loading(err: err, retry: load))]));
+      return Scaffold(body: Column(children: [VtAppBar(title: pcId(widget.id), back: true), Expanded(child: Loading(err: err, retry: load))]));
     }
     final b = (d['batch'] as Map).cast<String, dynamic>();
     final rows = (d['rows'] as List?)?.cast<Json>() ?? const <Json>[];
@@ -33,24 +33,22 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
 
     return Scaffold(
       body: Column(children: [
-        VtAppBar(title: 'Phiếu chi #${b['id']}', sub: vnTime(str(b['created_at'])), back: true),
+        VtAppBar(title: pcId(b['id']), sub: vnTime(str(b['created_at'])), back: true),
         Expanded(
           child: ListView(padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + MediaQuery.paddingOf(context).bottom), children: [
-            Box(padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16), gap: 4, children: [
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: 6),
-                  child: Avatar(size: 56, color: C.green, child: Ic('check', color: Colors.white, size: 28, stroke: 3)),
-                ),
-              ),
-              const Text('Bạn đã nhận', textAlign: TextAlign.center, style: T.muted),
-              Text(money(asInt(d['total'])), textAlign: TextAlign.center, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: C.text)),
-              Text('${rows.length} hồ sơ${adjs.isNotEmpty ? ' · ${adjs.length} khoản thưởng/trừ' : ''}', textAlign: TextAlign.center, style: T.muted),
+            Box(padding: const EdgeInsets.all(16), gap: 4, children: [
+              const Row(spacing: 8, children: [
+                Pill('Đã chuyển khoản', tone: 'ok', icon: 'check'),
+              ]),
+              const SizedBox(height: 8),
+              const Text('BẠN ĐÃ NHẬN', style: T.formHead),
+              Text(money(asInt(d['total'])), style: T.num.copyWith(fontSize: 30, letterSpacing: -0.8)),
+              Text('${rows.length} hồ sơ${adjs.isNotEmpty ? ' · ${adjs.length} khoản thưởng/trừ' : ''}', style: T.muted),
             ]),
             const SizedBox(height: 12),
             Box(gap: 14, children: [
               _Fact('Tài khoản nhận', str(b['ctv_bank'])),
-              _Fact('Mã giao dịch', str(b['ref']).isNotEmpty ? str(b['ref']) : 'Kế toán không ghi'),
+              _Fact('Mã giao dịch', str(b['ref']).isNotEmpty ? str(b['ref']) : 'Kế toán không ghi', mono: str(b['ref']).isNotEmpty),
               _Fact('Kế toán chuyển', str(b['by_name'])),
             ]),
             const SizedBox(height: 12),
@@ -63,7 +61,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
                 child: GestureDetector(
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => _Receipt(url: receipt, id: asInt(b['id'])))),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(R.card),
                     child: Stack(children: [
                       NetPhoto(receipt, height: 240, width: double.infinity, alignment: Alignment.topCenter),
                       Positioned(
@@ -71,7 +69,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
                         bottom: 10,
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: .65), borderRadius: BorderRadius.circular(999)),
+                          decoration: BoxDecoration(color: C.text.withValues(alpha: .78), borderRadius: BorderRadius.circular(R.ctl)),
                           child: const Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
                             Ic('eye', color: Colors.white, size: 16),
                             Text('Bấm để xem rõ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
@@ -95,7 +93,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
                     decoration: k > 0 ? const BoxDecoration(border: Border(top: BorderSide(color: C.line))) : null,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
                       Text('${asInt(adjs[k]['amount']) > 0 ? '+' : ''}${money(asInt(adjs[k]['amount']))}',
-                          style: TextStyle(fontWeight: FontWeight.w700, color: asInt(adjs[k]['amount']) > 0 ? C.ok : C.bad)),
+                          style: T.num.copyWith(color: asInt(adjs[k]['amount']) > 0 ? C.ok : C.bad)),
                       Text(str(adjs[k]['note']), style: T.muted),
                     ]),
                   ),
@@ -122,36 +120,37 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
       onTap: () => push(context, HouseScreen(id: id)),
       child: Row(spacing: 12, children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(R.ctl),
           child: SizedBox(
             width: 48,
             height: 48,
             child: cover != null
                 ? NetPhoto.id(asInt(cover), width: 48, height: 48)
-                : Container(color: C.line, alignment: Alignment.center, child: const Ic('image', color: C.muted)),
+                : Container(color: C.soft, alignment: Alignment.center, child: const Ic('image', color: C.subtle, size: 18)),
           ),
         ),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-            Text(str(r['address']).isNotEmpty ? str(r['address']) : 'Hồ sơ #$id',
+            Text('${hsId(id)}${r['photos_total'] != null ? '  ${asInt(r['photos_valid'])}/${asInt(r['photos_total'])} ảnh đạt' : ''}', style: T.mono),
+            Text(str(r['address']).isNotEmpty ? str(r['address']) : 'Chưa có địa chỉ',
                 maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, color: C.text)),
-            Text('#$id${r['photos_total'] != null ? ' · ${asInt(r['photos_valid'])}/${asInt(r['photos_total'])} ảnh đạt' : ''}', style: T.muted),
           ]),
         ),
-        Text(money(asInt(r['amount'])), style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
-        const Ic('right', color: C.muted, size: 18),
+        Text(money(asInt(r['amount'])), style: T.num.copyWith(fontSize: 14)),
+        const Ic('right', color: C.subtle, size: 16),
       ]),
     );
   }
 }
 
 class _Fact extends StatelessWidget {
-  const _Fact(this.label, this.value);
+  const _Fact(this.label, this.value, {this.mono = false});
   final String label, value;
+  final bool mono;
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-        Text(label, style: T.muted),
-        Text(value.isNotEmpty ? value : '—', style: T.body),
+  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 3, children: [
+        Text(label.toUpperCase(), style: T.formHead),
+        Text(value.isNotEmpty ? value : '—', style: mono ? T.mono.copyWith(color: C.text, fontSize: 14) : T.body),
       ]);
 }
 
@@ -169,7 +168,7 @@ class _Receipt extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
                 child: Row(children: [
-                  Expanded(child: Text('Biên lai phiếu chi #$id', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
+                  Expanded(child: Text('Biên lai ${pcId(id)}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
                   IconButton(tooltip: 'Đóng', onPressed: () => Navigator.pop(context), icon: const Ic('x', color: Colors.white, size: 26)),
                 ]),
               ),

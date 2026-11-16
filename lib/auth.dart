@@ -15,16 +15,47 @@ class AuthTop extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
+        // Nền navy + lưới mảnh kiểu bản vẽ; chữ canh trái
         child: Container(
           color: C.navy,
-          padding: EdgeInsets.fromLTRB(24, MediaQuery.paddingOf(context).top + 32, 24, 56),
-          child: Column(spacing: 10, children: [
-            const Brand(size: 56),
-            Text(title, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-            Text(text, textAlign: TextAlign.center, style: const TextStyle(color: C.heroMuted, fontSize: 15)),
-          ]),
+          child: CustomPaint(
+            painter: const _Grid(),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(20, MediaQuery.paddingOf(context).top + 28, 20, 60),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 6, children: [
+                const Row(spacing: 10, children: [
+                  Brand(size: 32),
+                  Text('VUA THẦU', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 2)),
+                ]),
+                const SizedBox(height: 22),
+                Text(title, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w600, letterSpacing: -0.6, height: 1.15)),
+                Text(text, style: const TextStyle(color: C.heroMuted, fontSize: 15, height: 1.4)),
+              ]),
+            ),
+          ),
         ),
       );
+}
+
+/// Lưới 24px rất mảnh trên nền navy (gợi bản vẽ kỹ thuật).
+class _Grid extends CustomPainter {
+  const _Grid();
+  @override
+  void paint(Canvas canvas, Size size) {
+    const step = 24.0;
+    final p = Paint()
+      ..color = Colors.white.withValues(alpha: .045)
+      ..strokeWidth = 1;
+    for (var y = 0.0; y <= size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
+    }
+    for (var x = 0.0; x <= size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
 /// Sau đăng nhập / đăng ký (AuthResult {user, access_token}): app chỉ dành cho CTV, admin và kế toán dùng web.
@@ -110,18 +141,18 @@ class GoogleBtn extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
         color: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: Color(0xFFDADCE0))),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: const BorderSide(color: C.field)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(R.ctl),
           onTap: busy ? null : onPressed,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 50),
+            constraints: const BoxConstraints(minHeight: 48),
             child: Row(mainAxisAlignment: MainAxisAlignment.center, spacing: 12, children: [
               if (busy)
                 const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2.4))
               else
                 SvgPicture.string(_gLogo, width: 20, height: 20),
-              Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Color(0xFF1F1F1F))),
+              Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.text)),
             ]),
           ),
         ),
@@ -166,7 +197,7 @@ class BankFields extends StatelessWidget {
                     label: Text(tips[k], style: const TextStyle(fontSize: 14, color: C.text)),
                     backgroundColor: Colors.white,
                     side: const BorderSide(color: C.line),
-                    shape: const StadiumBorder(),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl)),
                     onPressed: () {
                       c.name.text = tips[k];
                       c.name.selection = TextSelection.collapsed(offset: tips[k].length);

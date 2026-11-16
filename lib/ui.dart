@@ -1,4 +1,5 @@
-// Giao diện dùng chung, cùng màu và icon với bản web (static/app.css, templates/_ui.html).
+// Giao diện dùng chung, cùng bộ màu với web quản lý: sáng, phẳng, viền 1px, không đổ bóng.
+// Màu nhấn vàng chỉ dùng cho 1 nút chính mỗi màn, tab đang chọn và viền ô đang gõ.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -6,23 +7,45 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'api.dart';
 
 abstract final class C {
-  static const navy = Color(0xFF001C33), navy2 = Color(0xFF0B2F4F), navy3 = Color(0xFF164672);
-  static const amber = Color(0xFFFFB51C), amberBg = Color(0xFFFFF7E3), heroMuted = Color(0xFFA9BBCE);
-  static const bg = Color(0xFFF2F4F7), card = Colors.white, text = Color(0xFF101828), muted = Color(0xFF5B6878), line = Color(0xFFE4E7EC);
-  static const ok = Color(0xFF067647), okBg = Color(0xFFECFDF3), warn = Color(0xFFB54708), warnBg = Color(0xFFFFFAEB);
-  static const bad = Color(0xFFB42318), badBg = Color(0xFFFEF3F2), wait = Color(0xFF175CD3), waitBg = Color(0xFFEFF8FF);
-  static const soft = Color(0xFFE6EDF5), green = Color(0xFF12B76A), placeholder = Color(0xFF98A2B3);
+  // Thương hiệu
+  static const navy = Color(0xFF0B1F3A), navy2 = Color(0xFF13294B), navy3 = Color(0xFF1E3A64);
+  static const amber = Color(0xFFF5B301), amberBg = Color(0xFFFEF9EB);
+  // Nền, chữ, viền
+  static const bg = Color(0xFFF5F6F8), card = Colors.white, text = Color(0xFF0B1220), muted = Color(0xFF5B6474);
+  static const subtle = Color(0xFF8A93A3), line = Color(0xFFE3E6EB), field = Color(0xFFCDD2DA);
+  static const soft = Color(0xFFF0F2F5), placeholder = subtle;
+  // Chữ phụ trên nền navy
+  static const heroMuted = Color(0xFF9AA8BD), heroLine = Color(0x1FFFFFFF);
+  // Trạng thái: màu chính + nền nhạt (~8%)
+  static const wait = Color(0xFF2563EB), waitBg = Color(0xFFEEF3FD);
+  static const ok = Color(0xFF15803D), okBg = Color(0xFFECF5EF);
+  static const warn = Color(0xFFB45309), warnBg = Color(0xFFF9F1EB);
+  static const bad = Color(0xFFB91C1C), badBg = Color(0xFFF9EDED);
+  static const done = Color(0xFF0B1F3A), doneBg = Color(0xFFEBEDEF);
+  static const draft = Color(0xFF64748B), draftBg = Color(0xFFF3F4F6);
+  static const green = ok;
+}
+
+/// Bo góc: ô nhập, nút, nhãn 6; thẻ, khung 8.
+abstract final class R {
+  static const ctl = 6.0, card = 8.0;
 }
 
 /// tông: [màu chữ, màu nền]
 const tones = <String, (Color, Color)>{
-  'draft': (Color(0xFF475467), Color(0xFFF2F4F7)),
+  'draft': (C.draft, C.draftBg),
   'warn': (C.warn, C.warnBg),
   'wait': (C.wait, C.waitBg),
   'bad': (C.bad, C.badBg),
   'ok': (C.ok, C.okBg),
-  'done': (Color(0xFF0B2F4F), Color(0xFFE6EDF5)),
+  'done': (C.done, C.doneBg),
 };
+
+/// Mã hồ sơ: 81 -> "HS-00081".
+String hsId(Object? id) => 'HS-${asInt(id).toString().padLeft(5, '0')}';
+
+/// Mã phiếu chi: 7 -> "PC-00007".
+String pcId(Object? id) => 'PC-${asInt(id).toString().padLeft(5, '0')}';
 (Color, Color) tone(String t) => tones[t] ?? tones['draft']!;
 
 // ---------- Icon nét 2px (y hệt sprite của web) ----------
@@ -127,17 +150,25 @@ int asInt(Object? v) => v is num ? v.toInt() : int.tryParse('${v ?? ''}') ?? 0;
 String str(Object? v) => v == null ? '' : '$v';
 
 // ---------- Kiểu chữ ----------
+const _tab = [FontFeature.tabularFigures()];
+const _monoFallback = ['monospace', 'Roboto Mono', 'Courier'];
+
 abstract final class T {
   static const muted = TextStyle(color: C.muted, fontSize: 13, height: 1.4);
-  static const secT = TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: C.text);
-  static const label = TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.text);
-  static const hint = TextStyle(fontSize: 13, color: C.muted, height: 1.4);
-  static const body = TextStyle(fontSize: 15, color: C.text);
-  static const bold = TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: C.text);
-  static const formHead = TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.muted, letterSpacing: 0.5);
+  static const secT = TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.2, height: 1.3);
+  static const label = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.text);
+  static const hint = TextStyle(fontSize: 12.5, color: C.muted, height: 1.4);
+  static const body = TextStyle(fontSize: 15, color: C.text, height: 1.35);
+  static const bold = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.1);
+  /// Nhãn mục nhỏ in hoa
+  static const formHead = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: C.muted, letterSpacing: 0.8);
+  /// Số, tiền, giờ: chữ số đều cột
+  static const num = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.text, fontFeatures: _tab);
+  /// Mã hồ sơ, toạ độ: phông mono
+  static const mono = TextStyle(fontSize: 12.5, color: C.muted, fontFamily: 'monospace', fontFamilyFallback: _monoFallback, fontFeatures: _tab);
 }
 
-Future<R?> push<R>(BuildContext context, Widget page) => Navigator.of(context).push<R>(MaterialPageRoute(builder: (_) => page));
+Future<Res?> push<Res>(BuildContext context, Widget page) => Navigator.of(context).push<Res>(MaterialPageRoute(builder: (_) => page));
 
 // ---------- Mảnh giao diện ----------
 class VtAppBar extends StatelessWidget {
@@ -170,12 +201,15 @@ class VtAppBar extends StatelessWidget {
                   ),
                 )
               else
-                const Brand(size: 34),
+                const Brand(size: 30),
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-                  Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                  Text(title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
                   if (sub != null && sub!.isNotEmpty)
-                    Text(sub!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.heroMuted, fontSize: 13)),
+                    Text(sub!, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: C.heroMuted, fontSize: 12.5)),
                 ]),
               ),
               if (right != null) right!,
@@ -187,20 +221,21 @@ class VtAppBar extends StatelessWidget {
   }
 }
 
-/// Logo: ô vàng + dấu tích navy.
+/// Logo: ô vàng góc vuông nhẹ + dấu tích navy.
 class Brand extends StatelessWidget {
-  const Brand({super.key, this.size = 34});
+  const Brand({super.key, this.size = 30});
   final double size;
   @override
   Widget build(BuildContext context) => Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(size * 0.29)),
+        decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(size * 0.18)),
         alignment: Alignment.center,
-        child: Ic('mark', color: C.navy, size: size * 0.58, stroke: 3),
+        child: Ic('mark', color: C.navy, size: size * 0.6, stroke: 3),
       );
 }
 
+/// primary: nút chính màu vàng (mỗi màn 1 nút), dark: nút navy, normal: nút trắng viền, danger: nút trắng chữ đỏ.
 enum BtnKind { primary, dark, normal, danger }
 
 class Btn extends StatelessWidget {
@@ -216,17 +251,17 @@ class Btn extends StatelessWidget {
     final (bg, fg, border) = switch (kind) {
       BtnKind.primary => (C.amber, C.navy, C.amber),
       BtnKind.dark => (C.navy, Colors.white, C.navy),
-      BtnKind.normal => (Colors.white, C.text, C.line),
-      BtnKind.danger => (Colors.white, C.bad, C.line),
+      BtnKind.normal => (Colors.white, C.text, C.field),
+      BtnKind.danger => (Colors.white, C.bad, C.field),
     };
     final off = disabled || busy;
     return Opacity(
       opacity: disabled ? 0.45 : 1,
       child: Material(
         color: bg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: border)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: BorderSide(color: border)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(R.ctl),
           onTap: off ? null : onPressed,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 48),
@@ -238,7 +273,8 @@ class Btn extends StatelessWidget {
                 else if (icon != null)
                   Ic(icon!, color: fg, size: 18),
                 Flexible(
-                  child: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: fg)),
+                  child: Text(title,
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: fg, letterSpacing: -0.1)),
                 ),
               ]),
             ),
@@ -249,7 +285,7 @@ class Btn extends StatelessWidget {
   }
 }
 
-/// Thẻ trắng bo góc, các con xếp dọc cách nhau [gap].
+/// Khung trắng viền 1px, các con xếp dọc cách nhau [gap]. Không đổ bóng.
 class Box extends StatelessWidget {
   const Box({super.key, required this.children, this.padding = const EdgeInsets.all(16), this.gap = 12, this.onTap});
   final List<Widget> children;
@@ -265,25 +301,24 @@ class Box extends StatelessWidget {
     );
     return Material(
       color: C.card,
-      elevation: 1,
-      shadowColor: const Color(0x30101828),
-      borderRadius: BorderRadius.circular(12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.card), side: const BorderSide(color: C.line)),
       clipBehavior: Clip.antiAlias,
       child: onTap == null ? content : InkWell(onTap: onTap, child: content),
     );
   }
 }
 
+/// Tiêu đề mục: chữ nhỏ in hoa, giãn chữ, màu phụ.
 class Sec extends StatelessWidget {
   const Sec(this.title, {super.key, this.right});
   final String title;
   final String? right;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 12),
+        padding: const EdgeInsets.only(top: 14),
         child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Expanded(child: Text(title, style: T.secT)),
-          if (right != null) Text(right!, style: T.muted),
+          Expanded(child: Text(title.toUpperCase(), style: T.formHead)),
+          if (right != null) Text(right!, style: T.hint.copyWith(color: C.subtle)),
         ]),
       );
 }
@@ -320,7 +355,7 @@ class Field extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    OutlineInputBorder b(Color c, [double w = 1]) => OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: c, width: w));
+    OutlineInputBorder b(Color c, [double w = 1]) => OutlineInputBorder(borderRadius: BorderRadius.circular(R.ctl), borderSide: BorderSide(color: c, width: w));
     final err = error != null && error!.isNotEmpty;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 6, children: [
       Text(label, style: T.label),
@@ -344,16 +379,16 @@ class Field extends StatelessWidget {
           hintStyle: const TextStyle(color: C.placeholder),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           suffixIcon: suffix,
-          enabledBorder: b(err ? C.bad : const Color(0xFFD0D5DD)),
-          focusedBorder: b(err ? C.bad : C.navy3, 1.6),
+          enabledBorder: b(err ? C.bad : C.field),
+          focusedBorder: b(err ? C.bad : C.amber, 2),
         ),
       ),
       if (err)
         Text(error!, style: T.hint.copyWith(color: C.bad))
       else if (ai)
         const Row(spacing: 6, children: [
-          Ic('spark', size: 14, color: C.warn),
-          Text('AI đọc từ ảnh, kiểm tra lại', style: TextStyle(fontSize: 13, color: C.warn)),
+          Ic('spark', size: 13, color: C.warn),
+          Text('AI đọc từ ảnh, kiểm tra lại', style: TextStyle(fontSize: 12.5, color: C.warn)),
         ])
       else if (hint != null)
         Text(hint!, style: T.hint),
@@ -361,6 +396,7 @@ class Field extends StatelessWidget {
   }
 }
 
+/// Nhãn trạng thái: chấm vuông 8px (hoặc icon) + chữ màu trạng thái trên nền nhạt.
 class Pill extends StatelessWidget {
   const Pill(this.text, {super.key, required this.tone, this.icon});
   final String text, tone;
@@ -369,11 +405,14 @@ class Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     final (fg, bg) = tones[tone] ?? tones['draft']!;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Row(mainAxisSize: MainAxisSize.min, spacing: 4, children: [
-        if (icon != null) Ic(icon!, size: 13, color: fg),
-        Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: fg)),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
+      child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
+        if (icon != null)
+          Ic(icon!, size: 12, color: fg)
+        else
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: fg, borderRadius: BorderRadius.circular(1.5))),
+        Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg, height: 1.2)),
       ]),
     );
   }
@@ -400,9 +439,9 @@ class Segs extends StatelessWidget {
         for (var k = 0; k < total; k++)
           Expanded(
             child: Container(
-              height: 8,
+              height: 6,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(1),
                 color: k < n ? (full ? C.green : C.amber) : (dark ? Colors.white.withValues(alpha: .18) : C.line),
               ),
             ),
@@ -420,22 +459,25 @@ class Note extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (fg, bg) = tones[tone]!;
+    // Khung nhạt viền mảnh, vạch màu trạng thái bên trái
     return Material(
       color: bg,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: fg.withValues(alpha: .2))),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.card), side: BorderSide(color: fg.withValues(alpha: .22))),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
+        child: Container(
+          decoration: BoxDecoration(border: Border(left: BorderSide(color: fg, width: 3))),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 10, children: [
-            Ic(icon, color: fg),
+            Padding(padding: const EdgeInsets.only(top: 1), child: Ic(icon, color: fg, size: 18)),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                Text(title, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: fg)),
-                if (text != null && text!.isNotEmpty) Text(text!, style: const TextStyle(color: C.text, fontSize: 14, height: 1.4)),
+                Text(title, style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: fg)),
+                if (text != null && text!.isNotEmpty) Text(text!, style: const TextStyle(color: C.text, fontSize: 13.5, height: 1.4)),
               ]),
             ),
+            if (onTap != null) Padding(padding: const EdgeInsets.only(top: 1), child: Ic('right', color: fg, size: 16)),
           ]),
         ),
       ),
@@ -453,12 +495,12 @@ class Empty extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: Column(spacing: 8, children: [
           Container(
-            width: 64,
-            height: 64,
+            width: 52,
+            height: 52,
             margin: const EdgeInsets.only(bottom: 4),
-            decoration: const BoxDecoration(color: C.soft, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.card), border: Border.all(color: C.line)),
             alignment: Alignment.center,
-            child: Ic(icon, size: 28, color: C.navy3),
+            child: Ic(icon, size: 24, color: C.navy3, stroke: 1.75),
           ),
           Text(title, style: T.secT, textAlign: TextAlign.center),
           Text(text, style: T.muted, textAlign: TextAlign.center),
@@ -480,7 +522,7 @@ class Loading extends StatelessWidget {
                   Text(err, style: T.muted, textAlign: TextAlign.center),
                   if (retry != null) Btn('Thử lại', onPressed: retry),
                 ])
-              : const CircularProgressIndicator(color: C.navy),
+              : const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: C.navy, strokeWidth: 2.5)),
         ),
       );
 }
@@ -494,26 +536,31 @@ class MoneyHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         color: C.navy,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 44),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 6, children: [
-          Row(spacing: 6, children: [
-            const Ic('wallet', color: C.heroMuted, size: 16),
-            Text(label, style: const TextStyle(color: C.heroMuted, fontSize: 14)),
-          ]),
-          Text(money(amount), style: const TextStyle(color: Colors.white, fontSize: 34, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
-          Row(spacing: 10, children: [
-            for (final (k, v) in stats)
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: .08), borderRadius: BorderRadius.circular(12)),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                    Text(k, style: const TextStyle(color: C.heroMuted, fontSize: 13)),
-                    Text(money(v), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
-                  ]),
-                ),
-              ),
-          ]),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 44),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
+          Text(label.toUpperCase(), style: T.formHead.copyWith(color: C.heroMuted)),
+          Text(money(amount),
+              style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w600, letterSpacing: -0.8, fontFeatures: _tab)),
+          const SizedBox(height: 8),
+          // Các số phụ: 1 hàng chia cột bằng vạch mảnh
+          Container(
+            decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.heroLine))),
+            padding: const EdgeInsets.only(top: 10),
+            child: IntrinsicHeight(
+              child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                for (var i = 0; i < stats.length; i++) ...[
+                  if (i > 0) const VerticalDivider(width: 24, thickness: 1, color: C.heroLine),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
+                      Text(stats[i].$1, style: const TextStyle(color: C.heroMuted, fontSize: 12.5)),
+                      Text(money(stats[i].$2),
+                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600, fontFeatures: _tab)),
+                    ]),
+                  ),
+                ],
+              ]),
+            ),
+          ),
         ]),
       );
 }
@@ -536,7 +583,7 @@ class Avatar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(R.card)),
         alignment: Alignment.center,
         child: child,
       );
@@ -575,7 +622,7 @@ Future<bool> confirm(BuildContext context, {required String title, String text =
       content: text.isEmpty ? null : Text(text),
       actions: [
         TextButton(onPressed: () => Navigator.pop(c, false), child: Text(cancel)),
-        TextButton(onPressed: () => Navigator.pop(c, true), child: Text(ok, style: TextStyle(color: danger ? C.bad : C.navy, fontWeight: FontWeight.w700))),
+        TextButton(onPressed: () => Navigator.pop(c, true), child: Text(ok, style: TextStyle(color: danger ? C.bad : C.navy, fontWeight: FontWeight.w600))),
       ],
     ),
   );

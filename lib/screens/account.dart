@@ -131,11 +131,11 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
       children: [
         Box(children: [
           Row(spacing: 14, children: [
-            Avatar(size: 56, child: Text(initials(str(user['name'])), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: C.navy3))),
+            Avatar(size: 48, color: C.navy, child: Text(initials(str(user['name'])), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: C.amber, letterSpacing: 0.5))),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(str(user['name']), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700, color: C.text)),
-                Text('${str(user['username'])} · Cộng tác viên', style: T.muted),
+                Text(str(user['name']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
+                Text('${str(user['username'])} · Cộng tác viên', style: T.mono),
                 if (str(user['email']).isNotEmpty) Text('Google: ${str(user['email'])}', style: T.muted),
               ]),
             ),
@@ -167,8 +167,8 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
         _fold('rules', 'book', 'Quy tắc nghiệm thu', [
           for (final (ic, t) in rules)
             Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 10, children: [
-              Ic(ic, color: C.navy3),
-              Expanded(child: Text(t, style: const TextStyle(color: C.text, height: 1.4))),
+              Ic(ic, color: C.navy3, size: 18),
+              Expanded(child: Text(t, style: const TextStyle(color: C.text, fontSize: 14, height: 1.45))),
             ]),
         ]),
         if (hasOwed) ...[
@@ -188,7 +188,7 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
         const SizedBox(height: 12),
         Btn('Đăng xuất', icon: 'logout', kind: BtnKind.danger, onPressed: logout),
         const SizedBox(height: 12),
-        Text('Vua Thầu Nghiệm thu${version.isNotEmpty ? ' · bản $version' : ''}', textAlign: TextAlign.center, style: T.muted),
+        Text('VUA THẦU NGHIỆM THU${version.isNotEmpty ? ' · v$version' : ''}', textAlign: TextAlign.center, style: T.mono.copyWith(color: C.subtle, fontSize: 11, letterSpacing: 0.6)),
       ],
     );
   }
@@ -202,9 +202,9 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
         child: InkWell(
           onTap: () => setState(() => open = on ? '' : id),
           child: Row(spacing: 10, children: [
-            Ic(icon, color: C.navy3),
-            Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.text))),
-            AnimatedRotation(turns: on ? 0.25 : 0, duration: const Duration(milliseconds: 150), child: const Ic('right', color: C.muted, size: 18)),
+            Ic(icon, color: C.navy3, size: 18),
+            Expanded(child: Text(title, style: T.bold)),
+            AnimatedRotation(turns: on ? 0.25 : 0, duration: const Duration(milliseconds: 150), child: const Ic('right', color: C.subtle, size: 16)),
           ]),
         ),
       ),

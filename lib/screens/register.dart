@@ -79,7 +79,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               gap: 16,
               children: needGoogle
                   ? [
-                      const Text('Bước 1: chọn tài khoản Google', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: C.text)),
+                      const Text('Bước 1: chọn tài khoản Google', style: T.secT),
                       const Text('App lấy tên và email từ Google. Sau đó bạn điền số điện thoại, mật khẩu và tài khoản nhận tiền.', style: T.muted),
                       GoogleBtn(title: 'Đăng ký bằng Google', onPressed: choose, busy: busy == 'gg'),
                     ]
@@ -87,20 +87,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       if (g != null)
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(12)),
+                          decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(R.ctl), border: Border.all(color: C.line)),
                           child: Row(spacing: 12, children: [
                             Avatar(
                               color: Colors.white,
-                              child: Text(initials(g!.name.isNotEmpty ? g!.name : g!.email), style: const TextStyle(fontWeight: FontWeight.w800, color: C.navy3)),
+                              child: Text(initials(g!.name.isNotEmpty ? g!.name : g!.email), style: const TextStyle(fontWeight: FontWeight.w600, color: C.navy3)),
                             ),
                             Expanded(
                               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                 Text(g!.name.isNotEmpty ? g!.name : 'Tài khoản Google',
-                                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
+                                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, color: C.text)),
                                 Text(g!.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: T.muted),
                               ]),
                             ),
-                            TextButton(onPressed: busy.isEmpty ? choose : null, child: const Text('Đổi', style: TextStyle(color: C.navy3, fontWeight: FontWeight.w700))),
+                            TextButton(onPressed: busy.isEmpty ? choose : null, child: const Text('Đổi', style: TextStyle(color: C.navy, fontWeight: FontWeight.w600))),
                           ]),
                         ),
                       Field(label: 'Họ tên', controller: name, capitalization: TextCapitalization.words, autofill: const [AutofillHints.name]),
@@ -127,7 +127,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
             child: Text.rich(
               TextSpan(text: 'Đã có tài khoản? ', children: [
-                TextSpan(text: 'Đăng nhập', style: TextStyle(fontWeight: FontWeight.w700, color: C.navy3)),
+                TextSpan(text: 'Đăng nhập', style: TextStyle(fontWeight: FontWeight.w600, color: C.navy, decoration: TextDecoration.underline, decorationColor: C.amber, decorationThickness: 2)),
               ]),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 15, color: C.text),

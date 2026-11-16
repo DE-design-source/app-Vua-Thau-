@@ -50,7 +50,7 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
             Box(children: [
               Row(children: [
                 const Expanded(child: Text('Lần thanh toán tới', style: T.bold)),
-                Text('$approved/${cfg.payMin} hồ sơ', style: T.muted),
+                Text('$approved/${cfg.payMin} hồ sơ', style: T.num.copyWith(color: C.muted, fontSize: 13.5)),
               ]),
               Segs(n: approved, total: cfg.payMin),
               Text(
@@ -62,19 +62,17 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
             ]),
             Box(onTap: () => tabIndex.value = 3, children: [
               Row(spacing: 12, children: [
-                const Avatar(child: Ic('bank', color: C.navy3)),
+                const Avatar(size: 40, child: Ic('bank', color: C.navy3, size: 18)),
                 Expanded(
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
                     Text(hasBank ? str(bank['name']) : 'Tài khoản nhận tiền', style: const TextStyle(fontWeight: FontWeight.w600, color: C.text)),
-                    Text(
-                      hasBank
-                          ? '${str(bank['no'])} · ${str(bank['owner'])}'
-                          : (userBank.isNotEmpty ? userBank : 'Chưa có, bấm để thêm'),
-                      style: T.muted,
-                    ),
+                    if (hasBank)
+                      Text('${str(bank['no'])} · ${str(bank['owner'])}', style: T.mono)
+                    else
+                      Text(userBank.isNotEmpty ? userBank : 'Chưa có, bấm để thêm', style: T.muted),
                   ]),
                 ),
-                const Ic('right', color: C.muted, size: 18),
+                const Ic('right', color: C.subtle, size: 16),
               ]),
             ]),
             if (adj.isNotEmpty) ...[
@@ -91,17 +89,20 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
                     top: k > 0,
                     onTap: () => push(context, PaymentScreen(id: asInt(pays[k]['id']))),
                     child: Row(spacing: 12, children: [
-                      const Avatar(color: C.okBg, child: Ic('check', color: C.ok)),
                       Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                          Text('Nhận ${money(asInt(pays[k]['total']))}', style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 3, children: [
+                          Row(spacing: 8, children: [
+                            Text(pcId(pays[k]['id']), style: T.mono),
+                            Text(vnDate(str(pays[k]['created_at'])), style: T.hint.copyWith(color: C.subtle, fontFeatures: const [FontFeature.tabularFigures()])),
+                          ]),
                           Text(
-                            '${vnDate(str(pays[k]['created_at']))} · ${asInt(pays[k]['house_count'])} hồ sơ${str(pays[k]['ref']).isNotEmpty ? ' · ${str(pays[k]['ref'])}' : ''}',
+                            '${asInt(pays[k]['house_count'])} hồ sơ${str(pays[k]['ref']).isNotEmpty ? ' · mã GD ${str(pays[k]['ref'])}' : ''}',
                             style: T.muted,
                           ),
                         ]),
                       ),
-                      const Ic('right', color: C.muted, size: 18),
+                      Text('+${money(asInt(pays[k]['total']))}', style: T.num.copyWith(color: C.ok)),
+                      const Ic('right', color: C.subtle, size: 16),
                     ]),
                   ),
               ])
@@ -130,7 +131,7 @@ class _AdjRow extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: top ? const BoxDecoration(border: Border(top: BorderSide(color: C.line))) : null,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-        Text('${amount > 0 ? '+' : ''}${money(amount)}', style: TextStyle(fontWeight: FontWeight.w700, color: amount > 0 ? C.ok : C.bad)),
+        Text('${amount > 0 ? '+' : ''}${money(amount)}', style: T.num.copyWith(color: amount > 0 ? C.ok : C.bad)),
         Text(withDate ? '${str(a['note'])} · ${vnDate(str(a['created_at']))}' : str(a['note']), style: T.muted),
       ]),
     );

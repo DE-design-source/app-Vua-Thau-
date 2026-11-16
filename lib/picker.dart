@@ -135,7 +135,7 @@ class _PhotoPickerState extends State<PhotoPicker> {
       ],
       if (pct != null) Progress(pct: pct!, doneText: 'Đã tải xong. Đang kiểm tra giờ chụp, vị trí, ảnh trùng…'),
       if (err.isNotEmpty) Text(err, style: const TextStyle(color: C.bad, fontSize: 14)),
-      if (files.isNotEmpty) Btn('Tải lên ${files.length} ảnh', icon: 'upload', kind: BtnKind.primary, onPressed: send, busy: pct != null),
+      if (files.isNotEmpty) Btn('Tải lên ${files.length} ảnh', icon: 'upload', kind: BtnKind.dark, onPressed: send, busy: pct != null),
     ]);
   }
 }
@@ -151,7 +151,7 @@ class DropZone extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(R.card),
             splashColor: C.amberBg,
             highlightColor: C.amberBg,
             onTap: onTap,
@@ -159,10 +159,10 @@ class DropZone extends StatelessWidget {
               padding: const EdgeInsets.all(18),
               child: Column(spacing: 4, children: [
                 Row(mainAxisAlignment: MainAxisAlignment.center, spacing: 6, children: [
-                  const Ic('image', color: C.navy),
-                  Flexible(child: Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.navy))),
+                  const Ic('upload', color: C.navy, size: 18),
+                  Flexible(child: Text(title, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.navy))),
                 ]),
-                Text(sub, textAlign: TextAlign.center, style: T.muted),
+                Text(sub, textAlign: TextAlign.center, style: T.hint.copyWith(color: C.subtle)),
               ]),
             ),
           ),
@@ -173,16 +173,16 @@ class DropZone extends StatelessWidget {
 class _Dash extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final r = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(12));
+    final r = RRect.fromRectAndRadius(Offset.zero & size, const Radius.circular(R.card));
     canvas.drawRRect(r, Paint()..color = Colors.white);
     final path = Path()..addRRect(r.deflate(1));
     final paint = Paint()
-      ..color = const Color(0xFFB9C6D3)
+      ..color = C.field
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+      ..strokeWidth = 1.2;
     for (final m in path.computeMetrics()) {
-      for (double d = 0; d < m.length; d += 10) {
-        canvas.drawPath(m.extractPath(d, d + 5), paint);
+      for (double d = 0; d < m.length; d += 8) {
+        canvas.drawPath(m.extractPath(d, d + 4), paint);
       }
     }
   }
@@ -203,11 +203,11 @@ class PhotoGrid extends StatelessWidget {
         shrinkWrap: true,
         padding: EdgeInsets.zero,
         physics: const NeverScrollableScrollPhysics(),
-        children: [for (final c in children) ClipRRect(borderRadius: BorderRadius.circular(10), child: ColoredBox(color: C.line, child: c))],
+        children: [for (final c in children) ClipRRect(borderRadius: BorderRadius.circular(R.ctl), child: ColoredBox(color: C.soft, child: c))],
       );
 }
 
-/// Nút tròn xoá/bỏ ở góc phải trên của ô ảnh.
+/// Nút vuông nhỏ xoá/bỏ ở góc phải trên của ô ảnh.
 class DelBtn extends StatelessWidget {
   const DelBtn({super.key, required this.icon, required this.label, this.onTap});
   final String icon, label;
@@ -224,7 +224,7 @@ class DelBtn extends StatelessWidget {
             child: Container(
               width: 28,
               height: 28,
-              decoration: BoxDecoration(color: Colors.black.withValues(alpha: .6), shape: BoxShape.circle),
+              decoration: BoxDecoration(color: C.text.withValues(alpha: .72), borderRadius: BorderRadius.circular(4)),
               alignment: Alignment.center,
               child: Ic(icon, color: Colors.white, size: 15),
             ),
@@ -240,9 +240,9 @@ class Progress extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 6, children: [
         ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(value: pct, minHeight: 8, color: C.amber, backgroundColor: C.line),
+          borderRadius: BorderRadius.circular(1),
+          child: LinearProgressIndicator(value: pct, minHeight: 4, color: C.amber, backgroundColor: C.line),
         ),
-        Text(pct < 1 ? 'Đang tải lên ${(pct * 100).round()}%' : doneText, style: T.muted),
+        Text(pct < 1 ? 'Đang tải lên ${(pct * 100).round()}%' : doneText, style: T.muted.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
       ]);
 }

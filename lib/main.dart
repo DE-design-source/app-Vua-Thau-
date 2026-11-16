@@ -32,12 +32,44 @@ class VuaThauApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: navKey,
       navigatorObservers: [routeObserver],
+      // Phẳng: không đổ bóng, không lớp phủ màu M3, góc 6 (ô, nút) / 8 (hộp thoại, bảng)
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: C.navy, primary: C.navy, secondary: C.amber, surface: Colors.white),
+        colorScheme: ColorScheme.fromSeed(seedColor: C.navy, primary: C.navy, secondary: C.amber, surface: Colors.white)
+            .copyWith(surfaceTint: Colors.transparent, outline: C.field, outlineVariant: C.line, error: C.bad),
         scaffoldBackgroundColor: C.bg,
-        textSelectionTheme: const TextSelectionThemeData(cursorColor: C.navy3),
+        dividerColor: C.line,
+        dividerTheme: const DividerThemeData(color: C.line, thickness: 1, space: 1),
+        textSelectionTheme: TextSelectionThemeData(cursorColor: C.navy, selectionColor: C.amber.withValues(alpha: .35), selectionHandleColor: C.amber),
         progressIndicatorTheme: const ProgressIndicatorThemeData(color: C.navy),
+        dialogTheme: DialogThemeData(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.card), side: const BorderSide(color: C.line)),
+          titleTextStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.2),
+          contentTextStyle: const TextStyle(fontSize: 14.5, color: C.muted, height: 1.45),
+        ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(R.card))),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(foregroundColor: C.navy, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl))),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          backgroundColor: C.navy,
+          elevation: 0,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl)),
+        ),
+        chipTheme: ChipThemeData(
+          backgroundColor: Colors.white,
+          side: const BorderSide(color: C.line),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl)),
+          labelStyle: const TextStyle(fontSize: 13.5, color: C.text),
+        ),
+        navigationBarTheme: const NavigationBarThemeData(elevation: 0, surfaceTintColor: Colors.transparent, shadowColor: Colors.transparent),
       ),
       builder: (context, child) => ToastHost(child: child ?? const SizedBox()),
       home: const Boot(),
@@ -121,7 +153,7 @@ class _BootState extends State<Boot> {
               child: Column(mainAxisSize: MainAxisSize.min, spacing: 16, children: [
                 const Ic('alert', color: C.amber, size: 40),
                 const Text('Không kết nối được máy chủ',
-                    textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                    textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
                 const Text('Kiểm tra Wi-Fi hoặc 4G rồi thử lại.', textAlign: TextAlign.center, style: TextStyle(color: C.heroMuted)),
                 Btn('Thử lại', kind: BtnKind.primary, onPressed: run),
               ]),

@@ -273,7 +273,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             padding: const EdgeInsets.all(32),
             child: Column(mainAxisSize: MainAxisSize.min, spacing: 14, children: [
               const Ic('camera', color: C.amber, size: 40),
-              const Text('Chưa cho phép Camera', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+              const Text('Chưa cho phép Camera', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
               const Text('Cho app dùng camera để chụp ảnh nghiệm thu. Bạn vẫn có thể chọn ảnh có sẵn.',
                   textAlign: TextAlign.center, style: TextStyle(color: C.heroMuted)),
               Btn('Mở cài đặt để cho phép', kind: BtnKind.primary, onPressed: () => Geolocator.openAppSettings()),
@@ -330,19 +330,19 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 onTap: gpsErr.isNotEmpty ? () => Geolocator.openLocationSettings() : null,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: .4), border: Border.all(color: gpsCol), borderRadius: BorderRadius.circular(999)),
+                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: .45), border: Border.all(color: gpsCol), borderRadius: BorderRadius.circular(R.ctl)),
                   child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
                     Ic('pin', color: gpsCol, size: 15),
                     Flexible(
                       child: Text(gpsText,
-                          maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 12.5, fontFeatures: [FontFeature.tabularFigures()])),
                     ),
                   ]),
                 ),
               ),
             ),
             const Spacer(),
-            SizedBox(width: 56, child: Text('$n ảnh', textAlign: TextAlign.right, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
+            SizedBox(width: 56, child: Text('$n ảnh', textAlign: TextAlign.right, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontFeatures: [FontFeature.tabularFigures()]))),
           ]),
         ),
         Expanded(
@@ -391,8 +391,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
                   color: last.state == CheckState.ok ? const Color(0xFF32D583) : last.state == CheckState.bad ? const Color(0xFFFDA29B) : C.line,
                 ),
               ),
@@ -415,8 +415,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   height: 56,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: .08),
-                    border: Border.all(color: Colors.white.withValues(alpha: .5), width: 2),
-                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withValues(alpha: .5), width: 1.5),
+                    borderRadius: BorderRadius.circular(R.ctl),
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: shots.isEmpty
@@ -430,9 +430,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                               constraints: const BoxConstraints(minWidth: 20),
                               height: 20,
                               padding: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(10)),
+                              decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(4)),
                               alignment: Alignment.center,
-                              child: Text('${shots.length}', style: const TextStyle(color: C.navy, fontWeight: FontWeight.w800, fontSize: 12)),
+                              child: Text('${shots.length}', style: const TextStyle(color: C.navy, fontWeight: FontWeight.w700, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()])),
                             ),
                           ),
                         ]),
@@ -460,16 +460,16 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               opacity: shots.isEmpty ? 0.4 : 1,
               child: Material(
                 color: C.amber,
-                shape: const StadiumBorder(),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl)),
                 child: InkWell(
-                  customBorder: const StadiumBorder(),
+                  borderRadius: BorderRadius.circular(R.ctl),
                   onTap: shots.isEmpty ? null : () => setState(() => review = true),
                   child: Container(
                     constraints: const BoxConstraints(minWidth: 76),
                     height: 44,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     alignment: Alignment.center,
-                    child: Text(shots.isNotEmpty ? 'Xong (${shots.length})' : 'Xong', style: const TextStyle(color: C.navy, fontWeight: FontWeight.w800)),
+                    child: Text(shots.isNotEmpty ? 'Xong (${shots.length})' : 'Xong', style: const TextStyle(color: C.navy, fontWeight: FontWeight.w600, fontSize: 15)),
                   ),
                 ),
               ),
@@ -488,7 +488,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           child: Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(color: on ? C.amber : Colors.white.withValues(alpha: .12), shape: BoxShape.circle),
+            decoration: BoxDecoration(color: on ? C.amber : Colors.white.withValues(alpha: .12), borderRadius: BorderRadius.circular(R.ctl)),
             alignment: Alignment.center,
             child: child,
           ),
@@ -506,7 +506,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
             child: Row(children: [
-              Expanded(child: Text('${shots.length} ảnh vừa chụp', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: C.text))),
+              Expanded(child: Text('${shots.length} ảnh vừa chụp', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.2))),
               IconButton(tooltip: 'Đóng, chụp tiếp', onPressed: pct == null ? () => setState(() => review = false) : null, icon: const Ic('x', size: 26)),
             ]),
           ),
@@ -520,8 +520,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     Positioned(
                       left: 8,
                       top: 6,
-                      child: Text('${k + 1}',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, shadows: [Shadow(blurRadius: 3, color: Colors.black)])),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(color: C.text.withValues(alpha: .72), borderRadius: BorderRadius.circular(3)),
+                        child: Text((k + 1).toString().padLeft(2, '0'), style: T.mono.copyWith(color: Colors.white, fontSize: 11)),
+                      ),
                     ),
                     CheckBadge(checks[shots[k].path]),
                   ]),

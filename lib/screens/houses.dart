@@ -104,7 +104,7 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
                     style: T.bold,
                   ),
                 ),
-                Text('$approved/${cfg.payMin}', style: T.muted),
+                Text('$approved/${cfg.payMin}', style: T.num.copyWith(color: C.muted, fontSize: 14)),
               ]),
               Segs(n: approved, total: cfg.payMin),
               Text('Kế toán chuyển khoản gộp khi bạn có từ ${cfg.payMin} hồ sơ đã duyệt.', style: T.muted),
@@ -141,15 +141,15 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
       button: true,
       child: Material(
         color: on ? C.navy : Colors.white,
-        shape: StadiumBorder(side: BorderSide(color: on ? C.navy : C.line)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: BorderSide(color: on ? C.navy : C.line)),
         child: InkWell(
-          customBorder: const StadiumBorder(),
+          borderRadius: BorderRadius.circular(R.ctl),
           onTap: () => setLoc(k),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
-              Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: on ? Colors.white : C.text)),
-              Text('$n', style: TextStyle(fontWeight: FontWeight.w700, color: on ? C.amber : C.muted)),
+              Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: on ? Colors.white : C.text)),
+              Text('$n', style: T.num.copyWith(fontSize: 12.5, color: on ? C.amber : C.subtle)),
             ]),
           ),
         ),
@@ -164,39 +164,44 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
     final bad = n - valid;
     final status = str(r['status']);
     final first = index == 0, last = index == rows.length - 1;
+    const side = BorderSide(color: C.line);
+    // Cả danh sách là 1 khung viền 1px, các dòng ngăn bằng vạch mảnh
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, first ? 12 : 0, 16, 0),
+      padding: EdgeInsets.fromLTRB(16, first ? 4 : 0, 16, 0),
       child: Material(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(first ? 12 : 0), bottom: Radius.circular(last ? 12 : 0)),
-        clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () => push(context, HouseScreen(id: id)),
           child: Container(
-            decoration: first ? null : const BoxDecoration(border: Border(top: BorderSide(color: C.line))),
-            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(border: Border(top: side, bottom: last ? side : BorderSide.none, left: side, right: side)),
+            padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
             child: Row(spacing: 12, children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(R.ctl),
                 child: SizedBox(
-                  width: 64,
-                  height: 64,
-                  child: cover != null ? NetPhoto.id(asInt(cover), width: 64, height: 64) : Container(color: C.line, alignment: Alignment.center, child: const Ic('image', color: C.muted)),
+                  width: 56,
+                  height: 56,
+                  child: cover != null
+                      ? NetPhoto.id(asInt(cover), width: 56, height: 56)
+                      : Container(color: C.soft, alignment: Alignment.center, child: const Ic('image', color: C.subtle, size: 18)),
                 ),
               ),
               Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 3, children: [
-                  Text(str(r['address']).isNotEmpty ? str(r['address']) : 'Hồ sơ #$id',
-                      maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.text)),
-                  Text('#$id · $valid/$n ảnh đạt · ${vnDate(str(r['created_at']))}', maxLines: 1, overflow: TextOverflow.ellipsis, style: T.muted),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
+                  Row(spacing: 8, children: [
+                    Text(hsId(id), style: T.mono),
+                    Text('$valid/$n ảnh đạt · ${vnDate(str(r['created_at']))}', style: T.hint.copyWith(color: C.subtle, fontFeatures: const [FontFeature.tabularFigures()])),
+                  ]),
+                  Text(str(r['address']).isNotEmpty ? str(r['address']) : 'Chưa có địa chỉ',
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: C.text)),
                   Wrap(spacing: 6, runSpacing: 4, children: [
                     StatusBadge(status),
                     if (bad > 0 && const ['nhap', 'tra_lai', 'cho_duyet'].contains(status)) Pill('$bad ảnh lỗi', tone: 'bad'),
                   ]),
                 ]),
               ),
-              if (asInt(r['amount']) > 0) Text(money(asInt(r['amount'])), style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
-              const Ic('right', color: C.muted, size: 18),
+              if (asInt(r['amount']) > 0) Text(money(asInt(r['amount'])), style: T.num.copyWith(fontSize: 14)),
+              const Ic('right', color: C.subtle, size: 16),
             ]),
           ),
         ),

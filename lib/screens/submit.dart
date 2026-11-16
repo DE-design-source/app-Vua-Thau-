@@ -25,34 +25,32 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
       const VtAppBar(title: 'Nộp hồ sơ mới', sub: 'Chụp ngay hoặc chọn ảnh có sẵn'),
       Expanded(
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 32), children: [
-          Material(
-            color: C.navy,
-            borderRadius: BorderRadius.circular(16),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => push(context, const CameraScreen()),
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Row(spacing: 14, children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(14)),
-                    alignment: Alignment.center,
-                    child: const Ic('camera', color: C.navy, size: 26),
-                  ),
-                  const Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                      Text('Chụp bằng camera Vua Thầu', style: TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700)),
-                      Text('Tự in giờ, thứ, ngày tháng năm, địa chỉ GPS lên ảnh như Timemark', style: TextStyle(color: C.heroMuted, fontSize: 13)),
-                    ]),
-                  ),
-                  const Ic('right', color: Colors.white),
-                ]),
-              ),
-            ),
+          // Cách khuyên dùng: khung navy phẳng + 1 nút chính màu vàng
+          Container(
+            decoration: BoxDecoration(color: C.navy, borderRadius: BorderRadius.circular(R.card)),
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: [
+              const Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 12, children: [
+                Ic('camera', color: C.amber, size: 22),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 3, children: [
+                    Text('Camera Vua Thầu', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
+                    Text('Tự in giờ, ngày, địa chỉ và toạ độ GPS lên ảnh như Timemark. Ảnh chụp ở đây luôn đủ điều kiện về giờ và vị trí.',
+                        style: TextStyle(color: C.heroMuted, fontSize: 13, height: 1.4)),
+                  ]),
+                ),
+              ]),
+              Btn('Chụp ảnh công trình', icon: 'camera', kind: BtnKind.primary, onPressed: () => push(context, const CameraScreen())),
+            ]),
           ),
-          const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('hoặc', textAlign: TextAlign.center, style: T.muted)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            child: Row(spacing: 10, children: [
+              const Expanded(child: Divider()),
+              Text('HOẶC', style: T.formHead.copyWith(color: C.subtle)),
+              const Expanded(child: Divider()),
+            ]),
+          ),
           PhotoPicker(
             path: '/houses',
             have: 0,
@@ -63,8 +61,8 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
               if (id != null) push(context, HouseScreen(id: id));
             },
           ),
-          const Padding(padding: EdgeInsets.only(top: 24, bottom: 12), child: Text('Ảnh thế nào thì đạt?', style: T.secT)),
-          Box(children: [
+          const Padding(padding: EdgeInsets.only(top: 12, bottom: 8), child: Sec('Ảnh thế nào thì đạt')),
+          Box(gap: 14, children: [
             const _Tip(n: '1', title: 'Có giờ chụp và vị trí', text: 'Camera Vua Thầu tự in lên ảnh. Ảnh chọn sẵn phải chụp bằng Timemark trong 30 ngày.'),
             const _Tip(n: '2', title: 'Thấy rõ công trình đang xây', text: 'Không chụp lại màn hình, không dùng ảnh đã nộp.'),
             const _Tip(n: '3', title: 'Chụp bảng hiệu nhà thầu', text: 'AI đọc tên và SĐT nhà thầu, tự điền giúp bạn.'),
@@ -94,11 +92,11 @@ class _Tip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 12, children: [
         Container(
-          width: 28,
-          height: 28,
-          decoration: const BoxDecoration(color: C.amberBg, shape: BoxShape.circle),
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(color: C.soft, borderRadius: BorderRadius.circular(R.ctl), border: Border.all(color: C.line)),
           alignment: Alignment.center,
-          child: icon != null ? Ic(icon!, size: 16, color: C.warn) : Text(n!, style: const TextStyle(fontWeight: FontWeight.w800, color: C.warn)),
+          child: icon != null ? Ic(icon!, size: 14, color: C.navy3) : Text('0${n!}', style: T.mono.copyWith(color: C.navy, fontWeight: FontWeight.w600)),
         ),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [

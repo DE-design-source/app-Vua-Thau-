@@ -34,20 +34,21 @@ class ToastHost extends StatelessWidget {
             right: 12,
             child: Semantics(
               liveRegion: true,
+              // Phẳng, nền navy đậm, vạch vàng bên trái (không đổ bóng)
               child: Material(
-                color: const Color(0xFF101828),
-                elevation: 8,
-                borderRadius: BorderRadius.circular(12),
+                color: const Color(0xFF0B1220),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6), side: const BorderSide(color: Color(0x33FFFFFF))),
+                clipBehavior: Clip.antiAlias,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
                   onTap: () => _msgs.value = const [],
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
+                  child: Container(
+                    decoration: const BoxDecoration(border: Border(left: BorderSide(color: Color(0xFFF5B301), width: 3))),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 14, 12),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       spacing: 4,
                       children: [
-                        for (final m in msgs) Text(m, style: const TextStyle(color: Colors.white, fontSize: 15, height: 1.4)),
+                        for (final m in msgs) Text(m, style: const TextStyle(color: Colors.white, fontSize: 14.5, height: 1.4)),
                       ],
                     ),
                   ),

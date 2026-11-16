@@ -128,7 +128,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
   Widget build(BuildContext context) {
     final d = this.d;
     if (d == null) {
-      return Scaffold(body: Column(children: [VtAppBar(title: 'Hồ sơ #${widget.id}', back: true), Expanded(child: Loading(err: err, retry: load))]));
+      return Scaffold(body: Column(children: [VtAppBar(title: hsId(widget.id), back: true), Expanded(child: Loading(err: err, retry: load))]));
     }
     final h = (d['house'] as Map).cast<String, dynamic>();
     final ps = (d['photos'] as List?)?.cast<Json>() ?? const <Json>[];
@@ -163,7 +163,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
 
     return Scaffold(
       body: Column(children: [
-        VtAppBar(title: 'Hồ sơ #${widget.id}', sub: cfg.statusLabel(status), back: true),
+        VtAppBar(title: hsId(widget.id), sub: cfg.statusLabel(status), back: true),
         Expanded(
           child: RefreshIndicator(
             onRefresh: load,
@@ -192,7 +192,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                       ]
                     : [
                         Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 12, children: [
-                          Avatar(size: 40, color: clean ? C.okBg : C.amberBg, child: Ic(clean ? 'shield' : 'spark', color: clean ? C.ok : C.warn)),
+                          Avatar(size: 36, color: clean ? C.okBg : C.warnBg, child: Ic(clean ? 'shield' : 'spark', color: clean ? C.ok : C.warn, size: 18)),
                           Expanded(
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
                               Text(clean ? 'AI kiểm tra: tất cả đều đạt' : 'AI phản hồi: ${issues.length + fieldsTodo.length} điểm cần xem', style: T.secT),
@@ -236,12 +236,12 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                   Row(children: [
                     Expanded(
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text(editable ? 'Tiền dự kiến' : 'Số tiền hồ sơ', style: T.muted),
-                        Text(money(shown), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: C.text)),
+                        Text((editable ? 'Tiền dự kiến' : 'Số tiền hồ sơ').toUpperCase(), style: T.formHead),
+                        Text(money(shown), style: T.num.copyWith(fontSize: 24, letterSpacing: -0.5)),
                       ]),
                     ),
                     Text('$valid ảnh đạt\n$min ảnh ${money(cfg.payFor(min))} · ${min + 1}+ ảnh ${money(cfg.payFor(min + 1))}',
-                        textAlign: TextAlign.right, style: T.muted),
+                        textAlign: TextAlign.right, style: T.hint.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
                   ]),
                   if (editable) Segs(n: valid, total: min + 1),
                 ]),
@@ -288,16 +288,16 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                       onTap: () => setState(() => showLog = !showLog),
                       child: Row(spacing: 6, children: [
                         const Ic('clock', color: C.navy3),
-                        Expanded(child: Text('Lịch sử (${logs.length})', style: const TextStyle(fontWeight: FontWeight.w700, color: C.text))),
+                        Expanded(child: Text('Lịch sử (${logs.length})', style: T.bold)),
                         AnimatedRotation(turns: showLog ? 0.25 : 0, duration: const Duration(milliseconds: 150), child: const Ic('right', color: C.muted, size: 18)),
                       ]),
                     ),
                     if (showLog)
                       for (final l in logs.reversed)
                         Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                          Text(vnTime(str(l['at'])), style: T.muted),
+                          Text(vnTime(str(l['at'])), style: T.mono),
                           Text.rich(TextSpan(style: const TextStyle(color: C.text), children: [
-                            TextSpan(text: str(l['action']), style: const TextStyle(fontWeight: FontWeight.w700)),
+                            TextSpan(text: str(l['action']), style: const TextStyle(fontWeight: FontWeight.w600)),
                             TextSpan(text: ' · ${str(l['user_name'])}'),
                           ])),
                           if (str(l['note']).isNotEmpty) Text(str(l['note']), style: T.muted),
@@ -353,24 +353,28 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
       child: GestureDetector(
         onTap: () => Navigator.of(context).push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => Lightbox(ps: ps, at: k))),
         child: Container(
-          foregroundDecoration: BoxDecoration(border: Border.all(color: bad ? C.bad : Colors.transparent, width: 2), borderRadius: BorderRadius.circular(10)),
+          foregroundDecoration: BoxDecoration(border: Border.all(color: bad ? C.bad : Colors.transparent, width: 2), borderRadius: BorderRadius.circular(R.ctl)),
           child: Stack(fit: StackFit.expand, children: [
             NetPhoto.id(asInt(p['id'])),
             Positioned(
               left: 4,
               top: 4,
               child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(color: bad ? C.bad : C.ok, shape: BoxShape.circle),
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(color: bad ? C.bad : C.ok, borderRadius: BorderRadius.circular(4)),
                 alignment: Alignment.center,
-                child: Ic(bad ? 'x' : 'check', color: Colors.white, size: 14, stroke: 3),
+                child: Ic(bad ? 'x' : 'check', color: Colors.white, size: 13, stroke: 3),
               ),
             ),
             Positioned(
               left: 32,
               top: 5,
-              child: Text('${k + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, shadows: [Shadow(blurRadius: 3, color: Colors.black)])),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(color: C.text.withValues(alpha: .72), borderRadius: BorderRadius.circular(3)),
+                child: Text((k + 1).toString().padLeft(2, '0'), style: T.mono.copyWith(color: Colors.white, fontSize: 11)),
+              ),
             ),
             if (editable) DelBtn(icon: 'trash', label: 'Xoá ảnh ${k + 1}', onTap: () => del(p, k + 1)),
           ]),
@@ -386,9 +390,9 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
       checked: on,
       child: Material(
         color: on ? C.soft : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: BorderSide(color: on ? C.navy : C.line)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: BorderSide(color: on ? C.navy : C.field, width: on ? 1.5 : 1)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(R.ctl),
           onTap: () => setState(() {
             stage = g;
             touched.add('stage');
@@ -413,28 +417,28 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
 
   Widget _step(Json x, int k, int n) {
     final state = str(x['state']);
-    final col = switch (state) { 'done' => C.ok, 'current' => C.amber, 'bad' => C.bad, _ => const Color(0xFFD0D5DD) };
+    final col = switch (state) { 'done' => C.ok, 'current' => C.amber, 'bad' => C.bad, _ => C.field };
     return IntrinsicHeight(
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: [
         Column(children: [
           Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(color: state == 'todo' ? Colors.white : col, shape: BoxShape.circle, border: Border.all(color: col, width: 2)),
+            width: 26,
+            height: 26,
+            decoration: BoxDecoration(color: state == 'todo' ? Colors.white : col, borderRadius: BorderRadius.circular(R.ctl), border: Border.all(color: col, width: 1.5)),
             alignment: Alignment.center,
             child: state == 'done'
                 ? const Ic('check', color: Colors.white, size: 15, stroke: 3)
                 : state == 'bad'
                     ? const Ic('x', color: Colors.white, size: 15, stroke: 3)
-                    : Text('${k + 1}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: state == 'current' ? C.navy : C.muted)),
+                    : Text('0${k + 1}', style: T.mono.copyWith(fontWeight: FontWeight.w600, color: state == 'current' ? C.navy : C.subtle)),
           ),
-          if (k < n - 1) Expanded(child: Container(width: 2, constraints: const BoxConstraints(minHeight: 16), color: state == 'done' ? C.ok : C.line)),
+          if (k < n - 1) Expanded(child: Container(width: 1.5, constraints: const BoxConstraints(minHeight: 16), color: state == 'done' ? C.ok : C.line)),
         ]),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-              Text(str(x['title']), style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: state == 'todo' ? C.muted : C.text)),
+              Text(str(x['title']), style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: state == 'todo' ? C.subtle : C.text)),
               Text('${str(x['who'])}${str(x['at']).isNotEmpty ? ' · ${vnTime(str(x['at']))}' : ''}', style: T.muted),
               if (str(x['hint']).isNotEmpty) Padding(padding: const EdgeInsets.only(top: 2), child: Text(str(x['hint']), style: const TextStyle(color: C.text, fontSize: 14))),
             ]),
@@ -462,7 +466,7 @@ class _Fact extends StatelessWidget {
   final (String, String)? link;
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-        Text(label, style: T.muted),
+        Text(label.toUpperCase(), style: T.formHead),
         Text(value.isNotEmpty ? value : '—', style: T.body),
         if (link != null)
           GestureDetector(
@@ -512,7 +516,7 @@ class _LightboxState extends State<Lightbox> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
               child: Row(children: [
-                Expanded(child: Text('Ảnh ${cur + 1} / ${widget.ps.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700))),
+                Expanded(child: Text('Ảnh ${cur + 1} / ${widget.ps.length}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontFeatures: [FontFeature.tabularFigures()]))),
                 IconButton(tooltip: 'Đóng', onPressed: () => Navigator.pop(context), icon: const Ic('x', color: Colors.white, size: 26)),
               ]),
             ),
