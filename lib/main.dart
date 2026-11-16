@@ -1,5 +1,11 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
 import 'page.dart';
@@ -73,9 +79,30 @@ class _BootState extends State<Boot> {
     try {
       await start();
       if (mounted) setState(() => state = 'ok');
+      checkUpdate();
     } catch (_) {
       if (mounted) setState(() => state = 'off');
     }
+  }
+
+  /// App cài từ link Zalo (APK) không tự cập nhật: hỏi máy chủ bản mới nhất, mới hơn thì mời tải về cài đè.
+  Future<void> checkUpdate() async {
+    if (kDebugMode) return;
+    try {
+      final mine = int.tryParse((await PackageInfo.fromPlatform()).buildNumber) ?? 0;
+      final r = await http.get(Uri.parse('$host/tai-app/phien-ban')).timeout(const Duration(seconds: 10));
+      final j = jsonDecode(r.body) as Map<String, dynamic>;
+      final code = (j['code'] as num?)?.toInt() ?? 0;
+      final ctx = navKey.currentContext;
+      if (code <= mine || ctx == null || !ctx.mounted) return;
+      final ok = await confirm(ctx,
+          title: 'Có bản app mới',
+          text: 'Bản ${j['version']} đã có. Tải về và cài đè lên, tài khoản và hồ sơ vẫn giữ nguyên.',
+          ok: 'Tải về',
+          cancel: 'Để sau',
+          danger: false);
+      if (ok) await launchUrl(Uri.parse('$host/tai-app'), mode: LaunchMode.externalApplication);
+    } catch (_) {}
   }
 
   @override
