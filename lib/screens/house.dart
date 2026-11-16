@@ -270,6 +270,8 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                       value: str(h['address']),
                       link: h['lat'] != null ? ('Xem bản đồ', 'https://maps.google.com/?q=${h['lat']},${h['lng']}') : null,
                     ),
+                    // Tỉnh mới (34 tỉnh, thành từ 1/7/2025), máy chủ tự gán theo toạ độ / địa chỉ
+                    if (str(h['province_name']).isNotEmpty) _Fact(label: 'Tỉnh, thành', value: str(h['province_name'])),
                     _Fact(label: 'Số tầng', value: str(h['floors'])),
                     _Fact(label: 'Giai đoạn', value: str(h['stage'])),
                     _Fact(
