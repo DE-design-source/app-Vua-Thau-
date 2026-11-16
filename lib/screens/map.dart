@@ -1,0 +1,416 @@
+// Bản đồ (tab cuối): công trình của mình (màu theo trạng thái, bấm để mở hồ sơ) + chấm công trình CTV khác (chỉ vị trí):
+// vàng nhạt = chụp chưa quá hạn chặn trùng, xanh lá = cần cập nhật. Ô tìm địa điểm: đếm công trình trong bán kính. Nền OSM qua /tiles.
+import 'package:flutter/material.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../api.dart';
+import '../page.dart';
+import '../toast.dart';
+import '../ui.dart';
+import 'home_shell.dart' show TopActions;
+import 'house.dart';
+
+const _vn = LatLng(16.0, 106.2);
+
+// Công trình theo lần chụp: chưa quá số ngày chặn trùng vàng nhạt, quá thì xanh lá (cần cập nhật, được chụp lại)
+const ageFresh = Color(0xFFFCE38A), ageFreshLine = Color(0xFFB7791F), ageStale = Color(0xFF16A34A);
+const _radii = [500, 1000, 2000, 5000];
+
+class MapScreen extends StatefulWidget {
+  const MapScreen({super.key});
+  @override
+  State<MapScreen> createState() => _MapScreenState();
+}
+
+class _MapScreenState extends State<MapScreen> with PageData {
+  @override
+  String get path => '/ctv/map';
+  @override
+  bool get watchRoute => false; // trong tab: thanh tab tự gọi load()
+
+  final ctl = MapController();
+  bool ready = false, fitted = false, locating = false;
+  LatLng? me;
+
+  // Ô tìm địa điểm
+  final q = TextEditingController();
+  List<Json>? hits;
+  Json? place;
+  int radius = 1000;
+  bool finding = false;
+
+  @override
+  void dispose() {
+    q.dispose();
+    super.dispose();
+  }
+
+  Future<void> find() async {
+    final s = q.text.trim();
+    if (s.length < 3) return;
+    FocusScope.of(context).unfocus();
+    setState(() => finding = true);
+    try {
+      final j = await api('/geo/search?q=${Uri.encodeQueryComponent(s)}');
+      final ps = ((j['places'] as List?) ?? const []).cast<Json>();
+      if (!mounted) return;
+      setState(() {
+        hits = ps;
+        place = null;
+      });
+      if (ps.length == 1) pick(ps.first);
+      if (ps.isEmpty) toast('Không thấy địa điểm này. Ghi rõ hơn: số nhà, tên đường, phường, tỉnh.');
+    } catch (e) {
+      toast(errMsg(e));
+    } finally {
+      if (mounted) setState(() => finding = false);
+    }
+  }
+
+  void pick(Json p) {
+    setState(() => place = p);
+    _zoomTo(p);
+  }
+
+  void _zoomTo(Json p) {
+    final c = LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble());
+    // vòng bán kính vừa màn hình
+    const d = Distance();
+    ctl.fitCamera(CameraFit.coordinates(
+        coordinates: [d.offset(c, radius.toDouble(), 0), d.offset(c, radius.toDouble(), 180), d.offset(c, radius.toDouble(), 90), d.offset(c, radius.toDouble(), 270)],
+        padding: const EdgeInsets.all(24)));
+  }
+
+  /// Số công trình trong vòng: [tổng, cần cập nhật]
+  (int, int) _count() {
+    final p = place;
+    if (p == null) return (0, 0);
+    final c = LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble());
+    const d = Distance();
+    var n = 0, stale = 0;
+    for (final o in [...mine, ...others]) {
+      if (d(c, LatLng((o['lat'] as num).toDouble(), (o['lng'] as num).toDouble())) <= radius) {
+        n++;
+        if (o.containsKey('recent') && o['recent'] != true) stale++;
+      }
+    }
+    return (n, stale);
+  }
+
+  List<Json> get mine => ((d?['mine'] as List?) ?? const []).cast<Json>();
+  List<Json> get others => ((d?['others'] as List?) ?? const []).cast<Json>();
+
+  @override
+  void onData(Json j) => _fit();
+
+  // Lần đầu: canh vừa công trình của mình; chưa có thì cả nước
+  void _fit() {
+    if (!ready || fitted || d == null) return;
+    fitted = true;
+    final pts = [for (final p in mine) LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble())];
+    if (pts.length == 1) {
+      ctl.move(pts.first, 15);
+    } else if (pts.length > 1) {
+      ctl.fitCamera(CameraFit.coordinates(coordinates: pts, padding: const EdgeInsets.all(48), maxZoom: 15));
+    }
+  }
+
+  Future<void> locate() async {
+    setState(() => locating = true);
+    try {
+      var p = await Geolocator.checkPermission();
+      if (p == LocationPermission.denied) p = await Geolocator.requestPermission();
+      if (p == LocationPermission.denied || p == LocationPermission.deniedForever) {
+        toast('Chưa cho phép Vị trí');
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(locationSettings: const LocationSettings(accuracy: LocationAccuracy.high))
+          .timeout(const Duration(seconds: 15));
+      final here = LatLng(pos.latitude, pos.longitude);
+      if (!mounted) return;
+      setState(() => me = here);
+      ctl.move(here, 16);
+    } catch (_) {
+      toast('Không lấy được vị trí, bật GPS rồi thử lại');
+    } finally {
+      if (mounted) setState(() => locating = false);
+    }
+  }
+
+  void open(Json p) {
+    final lat = p['lat'], lng = p['lng'];
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 10, children: [
+            Row(spacing: 8, children: [
+              Text(hsId(p['id']), style: T.mono),
+              Pill(cfg.statusLabel(str(p['status'])), tone: cfg.statusTone(str(p['status']))),
+              const Spacer(),
+              Text(str(p['at']), style: T.mono),
+            ]),
+            Text(str(p['address']).isNotEmpty ? str(p['address']) : '(chưa có địa chỉ)', style: T.bold),
+            Row(spacing: 10, children: [
+              Expanded(
+                child: Btn('Mở hồ sơ', kind: BtnKind.primary, onPressed: () {
+                  Navigator.of(ctx).pop();
+                  push(context, HouseScreen(id: asInt(p['id'])));
+                }),
+              ),
+              Expanded(
+                child: Btn('Google Maps',
+                    onPressed: () => launchUrl(Uri.parse(gmapUrl(lat, lng)), mode: LaunchMode.externalApplication)),
+              ),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Color _tone(String status) => (tones[cfg.statusTone(status)] ?? tones['wait']!).$1;
+
+  @override
+  Widget build(BuildContext context) {
+    final dup = asInt(d?['dup_days']);
+    return Column(children: [
+      const VtAppBar(title: 'Bản đồ công trình', sub: 'Của bạn và nơi đã có người chụp', right: TopActions()),
+      Expanded(
+        child: Stack(children: [
+          FlutterMap(
+            mapController: ctl,
+            options: MapOptions(
+              initialCenter: _vn,
+              initialZoom: 5.3,
+              minZoom: 4,
+              maxZoom: 19,
+              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+              onMapReady: () {
+                ready = true;
+                _fit();
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: '$host/tiles/{z}/{x}/{y}.png',
+                userAgentPackageName: 'vn.com.vuathau',
+                maxNativeZoom: 19,
+                retinaMode: RetinaMode.isHighDensity(context),
+              ),
+              // Vòng tìm địa điểm
+              if (place != null)
+                CircleLayer(circles: [
+                  CircleMarker(
+                    point: LatLng((place!['lat'] as num).toDouble(), (place!['lng'] as num).toDouble()),
+                    radius: radius.toDouble(),
+                    useRadiusInMeter: true,
+                    color: C.wait.withValues(alpha: .07),
+                    borderColor: C.wait,
+                    borderStrokeWidth: 2,
+                  ),
+                ]),
+              // Công trình CTV khác: chỉ chấm (không chi tiết). Vàng nhạt: chụp chưa quá hạn (chụp lại sẽ bị chặn trùng);
+              // xanh lá: quá hạn, cần cập nhật công trình (được chụp lại)
+              CircleLayer(circles: [
+                for (final o in others)
+                  CircleMarker(
+                    point: LatLng((o['lat'] as num).toDouble(), (o['lng'] as num).toDouble()),
+                    radius: 6,
+                    color: o['recent'] == true ? ageFresh : ageStale,
+                    borderColor: o['recent'] == true ? ageFreshLine : Colors.white,
+                    borderStrokeWidth: 1.2,
+                  ),
+              ]),
+              MarkerLayer(markers: [
+                for (final p in mine)
+                  Marker(
+                    point: LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()),
+                    width: 30,
+                    height: 30,
+                    child: Semantics(
+                      button: true,
+                      label: 'Hồ sơ ${hsId(p['id'])}',
+                      child: GestureDetector(
+                        onTap: () => open(p),
+                        child: Center(
+                          child: Container(
+                            width: 18,
+                            height: 18,
+                            decoration: BoxDecoration(
+                              color: _tone(str(p['status'])),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2.5),
+                              boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 3)],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (me != null)
+                  Marker(
+                    point: me!,
+                    width: 22,
+                    height: 22,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: C.wait,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 4)],
+                      ),
+                    ),
+                  ),
+              ]),
+              const SimpleAttributionWidget(source: Text('OpenStreetMap')),
+            ],
+          ),
+          // Chú thích
+          Positioned(
+            left: 10,
+            bottom: 24,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: .94), borderRadius: BorderRadius.circular(R.card), border: Border.all(color: C.line)),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
+                _legend(C.navy3, 'Công trình của bạn (${mine.length})', big: true),
+                _legend(ageFresh, 'Người khác chụp chưa quá ${dup > 0 ? dup : 30} ngày', line: ageFreshLine),
+                _legend(ageStale, 'Quá ${dup > 0 ? dup : 30} ngày: cần cập nhật công trình'),
+              ]),
+            ),
+          ),
+          // Ô tìm địa điểm + kết quả + số công trình trong vòng
+          Positioned(left: 10, right: 10, top: 10, child: _searchBox()),
+          if (busy && d == null) const Center(child: CircularProgressIndicator()),
+          if (err.isNotEmpty && d == null)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, spacing: 12, children: [
+                  Text(err, textAlign: TextAlign.center, style: T.body),
+                  Btn('Thử lại', onPressed: load),
+                ]),
+              ),
+            ),
+          Positioned(
+            right: 12,
+            bottom: 24,
+            child: FloatingActionButton.small(
+              heroTag: 'vitri',
+              tooltip: 'Vị trí của tôi',
+              backgroundColor: Colors.white,
+              foregroundColor: C.navy,
+              elevation: 2,
+              onPressed: locating ? null : locate,
+              child: locating
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.my_location),
+            ),
+          ),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _searchBox() {
+    final (n, stale) = _count();
+    final box = BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(R.card),
+      border: Border.all(color: C.line),
+      boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 8, offset: Offset(0, 2))],
+    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 6, children: [
+      Container(
+        decoration: box,
+        child: Row(children: [
+          const SizedBox(width: 12),
+          const Icon(Icons.search, color: C.subtle, size: 20),
+          Expanded(
+            child: TextField(
+              controller: q,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => find(),
+              decoration: const InputDecoration(
+                  hintText: 'Tìm địa điểm: số nhà, đường, phường…', border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12)),
+            ),
+          ),
+          if (finding)
+            const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
+          else if (hits != null || place != null)
+            IconButton(
+              tooltip: 'Xoá tìm kiếm',
+              icon: const Icon(Icons.close, size: 20),
+              onPressed: () => setState(() {
+                q.clear();
+                hits = null;
+                place = null;
+              }),
+            )
+          else
+            IconButton(tooltip: 'Tìm', icon: const Icon(Icons.arrow_forward, size: 20), onPressed: find),
+        ]),
+      ),
+      if (hits != null && hits!.length > 1 && place == null)
+        Container(
+          decoration: box,
+          constraints: const BoxConstraints(maxHeight: 240),
+          child: ListView(shrinkWrap: true, padding: EdgeInsets.zero, children: [
+            for (final h in hits!)
+              ListTile(dense: true, title: Text(str(h['name']), maxLines: 2, overflow: TextOverflow.ellipsis), onTap: () => pick(h)),
+          ]),
+        ),
+      if (place != null)
+        Container(
+          decoration: box,
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
+            Text(str(place!['name']), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+            Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, children: [
+              const Text('Trong bán kính', style: TextStyle(fontSize: 13.5)),
+              DropdownButton<int>(
+                value: radius,
+                isDense: true,
+                underline: const SizedBox.shrink(),
+                items: [for (final r in _radii) DropdownMenuItem(value: r, child: Text(r >= 1000 ? '${r ~/ 1000} km' : '$r m'))],
+                onChanged: (r) {
+                  if (r == null) return;
+                  setState(() => radius = r);
+                  _zoomTo(place!);
+                },
+              ),
+              Text.rich(TextSpan(style: const TextStyle(fontSize: 13.5), children: [
+                const TextSpan(text: ': '),
+                TextSpan(text: '$n', style: const TextStyle(fontWeight: FontWeight.w700)),
+                const TextSpan(text: ' công trình'),
+                if (stale > 0) ...[
+                  const TextSpan(text: ' · '),
+                  TextSpan(text: '$stale', style: const TextStyle(fontWeight: FontWeight.w700, color: ageStale)),
+                  const TextSpan(text: ' cần cập nhật'),
+                ],
+              ])),
+            ]),
+            if (hits != null && hits!.length > 1)
+              GestureDetector(
+                onTap: () => setState(() => place = null),
+                child: Text('Chọn kết quả khác (${hits!.length})', style: const TextStyle(color: C.navy3, fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+          ]),
+        ),
+    ]);
+  }
+
+  Widget _legend(Color c, String text, {bool big = false, Color line = Colors.white}) => Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
+        Container(
+          width: big ? 12 : 10,
+          height: big ? 12 : 10,
+          decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: line, width: big ? 2 : 1)),
+        ),
+        Text(text, style: const TextStyle(fontSize: 12, color: C.text)),
+      ]);
+}

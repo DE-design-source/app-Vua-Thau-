@@ -226,12 +226,10 @@ class Brand extends StatelessWidget {
   const Brand({super.key, this.size = 30});
   final double size;
   @override
-  Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(size * 0.18)),
-        alignment: Alignment.center,
-        child: Ic('mark', color: C.navy, size: size * 0.6, stroke: 3),
+  Widget build(BuildContext context) => ClipRRect(
+        borderRadius: BorderRadius.circular(size * 0.18),
+        child: Image.asset('assets/logo.png', width: size, height: size, fit: BoxFit.cover, filterQuality: FilterQuality.medium,
+            semanticLabel: 'Vua Thầu'),
       );
 }
 

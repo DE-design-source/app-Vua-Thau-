@@ -140,7 +140,7 @@ class _BootState extends State<Boot> {
   @override
   Widget build(BuildContext context) {
     if (state == 'wait') {
-      return const Scaffold(backgroundColor: C.navy, body: Center(child: Brand(size: 72)));
+      return const Scaffold(backgroundColor: C.navy, body: Center(child: Brand(size: 132)));
     }
     if (state == 'off') {
       return AnnotatedRegion<SystemUiOverlayStyle>(

@@ -17,8 +17,6 @@ class AccountScreen extends StatefulWidget {
 class _AccountScreenState extends State<AccountScreen> with PageData {
   @override
   String get path => '/me';
-  @override
-  bool get watchRoute => false;
 
   BankCtl? bank;
   final pwOld = TextEditingController(), pwNew = TextEditingController();
@@ -97,7 +95,7 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
   Widget build(BuildContext context) {
     final d = this.d;
     return Column(children: [
-      const VtAppBar(title: 'Tài khoản', sub: 'Cộng tác viên'),
+      const VtAppBar(title: 'Tài khoản', sub: 'Cộng tác viên', back: true),
       Expanded(
         child: d == null || bank == null
             ? ListView(children: [

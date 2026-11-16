@@ -55,7 +55,7 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
     final rows = (d?['rows'] as List?)?.cast<Json>() ?? const <Json>[];
 
     return Column(children: [
-      VtAppBar(title: name.isNotEmpty ? 'Chào $name' : 'Hồ sơ của tôi', sub: 'Cộng tác viên'),
+      VtAppBar(title: name.isNotEmpty ? 'Chào $name' : 'Hồ sơ của tôi', sub: 'Cộng tác viên', right: const TopActions()),
       Expanded(
         child: RefreshIndicator(
           onRefresh: load,
@@ -74,7 +74,7 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
                               title: 'Nộp hồ sơ đầu tiên',
                               text: 'Chụp công trình đang xây (ít nhất ${cfg.minPhotos} ảnh) rồi tải lên.',
                               cta: 'Nộp ảnh công trình',
-                              onTap: () => tabIndex.value = 1,
+                              onTap: () => tabIndex.value = tabShoot,
                             );
                     }
                     return _row(d, rows, i - 1);
@@ -196,6 +196,7 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: C.text)),
                   Wrap(spacing: 6, runSpacing: 4, children: [
                     StatusBadge(status),
+                    if (r['vip'] == true) const Pill('VIP · chụp đầu tiên', tone: 'warn'),
                     if (bad > 0 && const ['nhap', 'tra_lai', 'cho_duyet'].contains(status)) Pill('$bad ảnh lỗi', tone: 'bad'),
                   ]),
                 ]),

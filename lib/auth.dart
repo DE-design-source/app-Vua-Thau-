@@ -23,10 +23,7 @@ class AuthTop extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.fromLTRB(20, MediaQuery.paddingOf(context).top + 28, 20, 60),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 6, children: [
-                const Row(spacing: 10, children: [
-                  Brand(size: 32),
-                  Text('VUA THẦU', style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 2)),
-                ]),
+                const Brand(size: 72), // logo đã có chữ VUA THẦU MAP
                 const SizedBox(height: 22),
                 Text(title, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w600, letterSpacing: -0.6, height: 1.15)),
                 Text(text, style: const TextStyle(color: C.heroMuted, fontSize: 15, height: 1.4)),

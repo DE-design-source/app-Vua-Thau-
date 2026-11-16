@@ -16,14 +16,12 @@ class IncomeScreen extends StatefulWidget {
 class _IncomeScreenState extends State<IncomeScreen> with PageData {
   @override
   String get path => '/ctv/income';
-  @override
-  bool get watchRoute => false;
 
   @override
   Widget build(BuildContext context) {
     final d = this.d;
     return Column(children: [
-      const VtAppBar(title: 'Thu nhập', sub: 'Tiền nghiệm thu của bạn'),
+      const VtAppBar(title: 'Thu nhập', sub: 'Tiền nghiệm thu của bạn', back: true),
       Expanded(
         child: d == null
             ? Loading(err: err, retry: load)
@@ -60,7 +58,7 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
                 style: T.muted,
               ),
             ]),
-            Box(onTap: () => tabIndex.value = 3, children: [
+            Box(onTap: () => openAccount(context), children: [
               Row(spacing: 12, children: [
                 const Avatar(size: 40, child: Ic('bank', color: C.navy3, size: 18)),
                 Expanded(

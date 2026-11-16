@@ -1,4 +1,6 @@
-// 4 tab dưới đáy: Hồ sơ, Nộp ảnh, Thu nhập, Tài khoản. Tab chỉ dựng khi mở lần đầu, chọn lại là tải mới.
+// 3 tab dưới đáy: Hồ sơ · Chụp hình (nút tròn vàng nổi ở giữa) · Bản đồ.
+// Thu nhập và Tài khoản: 2 nút góc trên bên phải (TopActions), mở thành trang riêng.
+// Tab chỉ dựng khi mở lần đầu, chọn lại là tải mới.
 import 'package:flutter/material.dart';
 
 import '../api.dart';
@@ -7,9 +9,33 @@ import '../ui.dart';
 import 'account.dart';
 import 'houses.dart';
 import 'income.dart';
+import 'map.dart';
 import 'submit.dart';
 
 final tabIndex = ValueNotifier<int>(0);
+
+const tabHouses = 0, tabShoot = 1, tabMap = 2;
+
+void openIncome(BuildContext context) => push(context, const Scaffold(body: IncomeScreen()));
+void openAccount(BuildContext context) => push(context, const Scaffold(body: AccountScreen()));
+
+/// Góc trên bên phải các tab: Thu nhập, Tài khoản.
+class TopActions extends StatelessWidget {
+  const TopActions({super.key});
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+        IconButton(
+          tooltip: 'Thu nhập',
+          onPressed: () => openIncome(context),
+          icon: const Icon(Icons.account_balance_wallet_outlined, color: Colors.white, size: 24),
+        ),
+        IconButton(
+          tooltip: 'Tài khoản',
+          onPressed: () => openAccount(context),
+          icon: const Icon(Icons.account_circle_outlined, color: Colors.white, size: 26),
+        ),
+      ]);
+}
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -18,13 +44,14 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> with RouteAware {
-  final keys = List.generate(4, (_) => GlobalKey());
+  final keys = List.generate(3, (_) => GlobalKey());
   final opened = <int>{};
   bool _sub = false;
 
   @override
   void initState() {
     super.initState();
+    if (tabIndex.value > tabMap) tabIndex.value = tabHouses;
     opened.add(tabIndex.value);
     tabIndex.addListener(_changed);
   }
@@ -58,17 +85,18 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
     }
   }
 
-  // Quay về từ 1 hồ sơ, camera...: tải lại tab đang mở
+  // Quay về từ 1 hồ sơ, camera, Thu nhập...: tải lại tab đang mở
   @override
   void didPopNext() => _reload();
+
+  void _go(int k) => tabIndex.value == k ? _reload() : tabIndex.value = k;
 
   Widget _tab(int i) {
     if (!opened.contains(i)) return const SizedBox.shrink();
     return switch (i) {
-      0 => HousesScreen(key: keys[0]),
-      1 => SubmitScreen(key: keys[1]),
-      2 => IncomeScreen(key: keys[2]),
-      _ => AccountScreen(key: keys[3]),
+      tabHouses => HousesScreen(key: keys[0]),
+      tabShoot => SubmitScreen(key: keys[1]),
+      _ => MapScreen(key: keys[2]),
     };
   }
 
@@ -76,52 +104,114 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
   Widget build(BuildContext context) {
     final i = tabIndex.value;
     return Scaffold(
-      body: IndexedStack(index: i, children: [for (var k = 0; k < 4; k++) _tab(k)]),
+      body: IndexedStack(index: i, children: [for (var k = 0; k < 3; k++) _tab(k)]),
       bottomNavigationBar: ValueListenableBuilder<int>(
         valueListenable: badge,
-        // Thanh tab phẳng: viền trên 1px, tab đang chọn có vạch vàng phía trên icon
-        builder: (context, n, _) => NavigationBarTheme(
-          data: NavigationBarThemeData(
-            height: 64,
-            labelTextStyle: WidgetStateProperty.resolveWith((s) => s.contains(WidgetState.selected)
-                ? const TextStyle(color: C.navy, fontWeight: FontWeight.w600, fontSize: 11.5)
-                : const TextStyle(color: C.subtle, fontSize: 11.5)),
-            iconTheme: WidgetStateProperty.resolveWith((s) => IconThemeData(size: 22, color: s.contains(WidgetState.selected) ? C.navy : C.subtle)),
-            indicatorShape: const Border(top: BorderSide(color: C.amber, width: 3)),
-          ),
-          child: Container(
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.line))),
-            child: NavigationBar(
-            selectedIndex: i,
-            backgroundColor: Colors.white,
-            indicatorColor: Colors.transparent,
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-            onDestinationSelected: (k) => tabIndex.value == k ? _reload() : tabIndex.value = k,
-            destinations: [
-              NavigationDestination(
-                icon: Badge(
-                  isLabelVisible: n > 0,
-                  backgroundColor: C.bad,
-                  label: Text(n > 99 ? '99+' : '$n'),
-                  child: const Icon(Icons.home_outlined),
+        builder: (context, n, _) => Container(
+          decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: C.line))),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 68,
+              child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Expanded(
+                  child: _NavItem(
+                    label: 'Hồ sơ',
+                    icon: Icons.home_outlined,
+                    iconOn: Icons.home,
+                    on: i == tabHouses,
+                    badge: n,
+                    onTap: () => _go(tabHouses),
+                  ),
                 ),
-                selectedIcon: Badge(
-                  isLabelVisible: n > 0,
-                  backgroundColor: C.bad,
-                  label: Text(n > 99 ? '99+' : '$n'),
-                  child: const Icon(Icons.home),
+                Expanded(child: _ShootItem(on: i == tabShoot, onTap: () => _go(tabShoot))),
+                Expanded(
+                  child: _NavItem(
+                    label: 'Bản đồ',
+                    icon: Icons.map_outlined,
+                    iconOn: Icons.map,
+                    on: i == tabMap,
+                    onTap: () => _go(tabMap),
+                  ),
                 ),
-                label: 'Hồ sơ',
-              ),
-              const NavigationDestination(icon: Icon(Icons.add_a_photo_outlined), selectedIcon: Icon(Icons.add_a_photo), label: 'Nộp ảnh'),
-              const NavigationDestination(
-                  icon: Icon(Icons.account_balance_wallet_outlined), selectedIcon: Icon(Icons.account_balance_wallet), label: 'Thu nhập'),
-              const NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Tài khoản'),
-            ],
+              ]),
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({required this.label, required this.icon, required this.iconOn, required this.on, required this.onTap, this.badge = 0});
+  final String label;
+  final IconData icon, iconOn;
+  final bool on;
+  final int badge;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        selected: on,
+        label: label,
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: onTap,
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, spacing: 3, children: [
+            // tab đang chọn: vạch vàng phía trên icon
+            Container(width: 28, height: 3, color: on ? C.amber : Colors.transparent),
+            Badge(
+              isLabelVisible: badge > 0,
+              backgroundColor: C.bad,
+              label: Text(badge > 99 ? '99+' : '$badge'),
+              child: Icon(on ? iconOn : icon, size: 24, color: on ? C.navy : C.subtle),
+            ),
+            Text(label,
+                style: on
+                    ? const TextStyle(color: C.navy, fontWeight: FontWeight.w600, fontSize: 12)
+                    : const TextStyle(color: C.subtle, fontSize: 12)),
+          ]),
+        ),
+      );
+}
+
+/// Nút giữa: tròn vàng nổi lên khỏi thanh tab.
+class _ShootItem extends StatelessWidget {
+  const _ShootItem({required this.on, required this.onTap});
+  final bool on;
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        selected: on,
+        label: 'Chụp hình',
+        excludeSemantics: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          // Nút tròn nhô lên trên mép thanh tab (không làm thanh cao thêm)
+          child: Stack(clipBehavior: Clip.none, alignment: Alignment.topCenter, children: [
+            Positioned(
+              top: -18,
+              child: Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: C.amber,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: on ? C.navy : Colors.white, width: 3),
+                  boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2))],
+                ),
+                child: const Icon(Icons.photo_camera, color: C.navy, size: 28),
+              ),
+            ),
+            Positioned(
+              bottom: 9,
+              child: Text('Chụp hình',
+                  style: TextStyle(color: C.navy, fontWeight: on ? FontWeight.w700 : FontWeight.w600, fontSize: 12)),
+            ),
+          ]),
+        ),
+      );
 }

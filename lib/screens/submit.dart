@@ -5,6 +5,7 @@ import '../api.dart';
 import '../page.dart';
 import '../picker.dart';
 import '../ui.dart';
+import 'home_shell.dart' show TopActions;
 import 'camera.dart';
 import 'house.dart';
 
@@ -22,7 +23,7 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
   Widget build(BuildContext context) {
     final min = cfg.minPhotos;
     return Column(children: [
-      const VtAppBar(title: 'Nộp hồ sơ mới', sub: 'Chụp ngay hoặc chọn ảnh có sẵn'),
+      const VtAppBar(title: 'Nộp hồ sơ mới', sub: 'Chụp ngay hoặc chọn ảnh có sẵn', right: TopActions()),
       Expanded(
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 32), children: [
           // Cách khuyên dùng: khung navy phẳng + 1 nút chính màu vàng

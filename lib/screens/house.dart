@@ -268,7 +268,8 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                     _Fact(
                       label: 'Địa chỉ',
                       value: str(h['address']),
-                      link: h['lat'] != null ? ('Xem bản đồ', 'https://maps.google.com/?q=${h['lat']},${h['lng']}') : null,
+                      link: h['lat'] != null ? ('Xem Google Maps', gmapUrl(h['lat'], h['lng'])) : null,
+                      copy: h['lat'] != null ? gmapUrl(h['lat'], h['lng']) : null,
                     ),
                     // Tỉnh mới (34 tỉnh, thành từ 1/7/2025), máy chủ tự gán theo toạ độ / địa chỉ
                     if (str(h['province_name']).isNotEmpty) _Fact(label: 'Tỉnh, thành', value: str(h['province_name'])),
@@ -462,19 +463,35 @@ class _Line extends StatelessWidget {
       ]);
 }
 
+/// Link Google Maps của 1 toạ độ (không cần key; điện thoại có app Google Maps thì mở app).
+String gmapUrl(Object? lat, Object? lng) => 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';
+
 class _Fact extends StatelessWidget {
-  const _Fact({required this.label, required this.value, this.link});
+  const _Fact({required this.label, required this.value, this.link, this.copy});
   final String label, value;
   final (String, String)? link;
+
+  /// Có: thêm nút "Chép link" bên cạnh link (để gửi qua Zalo...)
+  final String? copy;
   @override
   Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
         Text(label.toUpperCase(), style: T.formHead),
         Text(value.isNotEmpty ? value : '—', style: T.body),
         if (link != null)
-          GestureDetector(
-            onTap: () => launchUrl(Uri.parse(link!.$2), mode: LaunchMode.externalApplication),
-            child: Text(link!.$1, style: const TextStyle(color: C.navy3, fontWeight: FontWeight.w600, fontSize: 15)),
-          ),
+          Wrap(spacing: 16, children: [
+            GestureDetector(
+              onTap: () => launchUrl(Uri.parse(link!.$2), mode: LaunchMode.externalApplication),
+              child: Text(link!.$1, style: const TextStyle(color: C.navy3, fontWeight: FontWeight.w600, fontSize: 15)),
+            ),
+            if (copy != null)
+              GestureDetector(
+                onTap: () async {
+                  await Clipboard.setData(ClipboardData(text: copy!));
+                  toast('Đã chép link Google Maps, dán vào Zalo để gửi');
+                },
+                child: const Text('Chép link', style: TextStyle(color: C.navy3, fontWeight: FontWeight.w600, fontSize: 15)),
+              ),
+          ]),
       ]);
 }
 
