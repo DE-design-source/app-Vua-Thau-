@@ -1,5 +1,7 @@
 // Bản đồ (tab cuối): công trình của mình (màu theo trạng thái, bấm để mở hồ sơ) + chấm công trình CTV khác (chỉ vị trí):
 // vàng nhạt = chụp chưa quá hạn chặn trùng, xanh lá = cần cập nhật. Ô tìm địa điểm: đếm công trình trong bán kính. Nền OSM qua /tiles.
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
@@ -16,7 +18,9 @@ import 'house.dart';
 const _vn = LatLng(16.0, 106.2);
 
 // Công trình theo lần chụp: chưa quá số ngày chặn trùng vàng nhạt, quá thì xanh lá (cần cập nhật, được chụp lại)
-const ageFresh = Color(0xFFFCE38A), ageFreshLine = Color(0xFFB7791F), ageStale = Color(0xFF22C55E); // xanh lá tươi
+// vàng: chụp chưa quá hạn (giống web); xanh lá tươi: cần cập nhật
+const ageFresh = Color(0xFFF5B301), ageFreshLine = Color(0xFFB7791F), ageStale = Color(0xFF22C55E);
+const minePin = C.wait; // công trình của mình: ghim xanh dương
 const _radii = [500, 1000, 2000, 5000];
 
 class MapScreen extends StatefulWidget {
@@ -181,7 +185,6 @@ class _MapScreenState extends State<MapScreen> with PageData {
     );
   }
 
-  Color _tone(String status) => (tones[cfg.statusTone(status)] ?? tones['wait']!).$1;
 
   @override
   Widget build(BuildContext context) {
@@ -222,16 +225,16 @@ class _MapScreenState extends State<MapScreen> with PageData {
                     borderStrokeWidth: 2,
                   ),
                 ]),
-              // Công trình CTV khác: chỉ chấm (không chi tiết). Vàng nhạt: chụp chưa quá hạn (chụp lại sẽ bị chặn trùng);
+              // Công trình CTV khác: ghim nhỏ (không chi tiết). Vàng: chụp chưa quá hạn (chụp lại sẽ bị chặn trùng);
               // xanh lá: quá hạn, cần cập nhật công trình (được chụp lại)
-              CircleLayer(circles: [
+              MarkerLayer(markers: [
                 for (final o in shownOthers)
-                  CircleMarker(
+                  Marker(
                     point: LatLng((o['lat'] as num).toDouble(), (o['lng'] as num).toDouble()),
-                    radius: 6,
-                    color: o['recent'] == true ? ageFresh : ageStale,
-                    borderColor: o['recent'] == true ? ageFreshLine : Colors.white,
-                    borderStrokeWidth: 1.2,
+                    width: 22,
+                    height: 29,
+                    alignment: Alignment.topCenter,
+                    child: Pin(color: o['recent'] == true ? ageFresh : ageStale),
                   ),
               ]),
               MarkerLayer(markers: [
@@ -239,25 +242,12 @@ class _MapScreenState extends State<MapScreen> with PageData {
                   Marker(
                     point: LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()),
                     width: 30,
-                    height: 30,
+                    height: 40,
+                    alignment: Alignment.topCenter,
                     child: Semantics(
                       button: true,
                       label: 'Hồ sơ ${hsId(p['id'])}',
-                      child: GestureDetector(
-                        onTap: () => open(p),
-                        child: Center(
-                          child: Container(
-                            width: 18,
-                            height: 18,
-                            decoration: BoxDecoration(
-                              color: _tone(str(p['status'])),
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2.5),
-                              boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 3)],
-                            ),
-                          ),
-                        ),
-                      ),
+                      child: GestureDetector(onTap: () => open(p), child: const Pin(color: minePin)),
                     ),
                   ),
                 if (me != null)
@@ -415,7 +405,7 @@ class _MapScreenState extends State<MapScreen> with PageData {
     // màu null: không có chấm (Xem tất cả)
     final opts = <(String, String, Color?, Color, int)>[
       ('all', 'Xem tất cả công trình', null, Colors.white, mine.length + others.length),
-      ('mine', 'Công trình của bạn', C.wait, Colors.white, mine.length),
+      ('mine', 'Công trình của bạn', minePin, Colors.white, mine.length),
       ('fresh', 'Cập nhật chưa quá $days ngày', ageFresh, ageFreshLine, _n(true)),
       ('stale', 'Quá $days ngày: cần cập nhật', ageStale, Colors.white, _n(false)),
     ];
@@ -483,4 +473,39 @@ class _MapScreenState extends State<MapScreen> with PageData {
           ),
         Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: C.text))),
       ]);
+}
+
+/// Ghim định vị (giọt nước, lỗ tròn trắng giữa), mũi ghim ở đáy: đặt Marker với alignment topCenter.
+class Pin extends StatelessWidget {
+  const Pin({super.key, required this.color});
+  final Color color;
+  @override
+  Widget build(BuildContext context) => CustomPaint(painter: _PinPainter(color));
+}
+
+class _PinPainter extends CustomPainter {
+  const _PinPainter(this.color);
+  final Color color;
+  @override
+  void paint(Canvas canvas, Size size) {
+    // Khung gốc 32 x 42 (giống ghim trên web)
+    final sx = size.width / 32, sy = size.height / 42;
+    final p = ui.Path()
+      ..moveTo(16 * sx, 1.5 * sy)
+      ..cubicTo(8.3 * sx, 1.5 * sy, 2 * sx, 7.7 * sy, 2 * sx, 15.4 * sy)
+      ..cubicTo(2 * sx, 25.8 * sy, 16 * sx, 40.5 * sy, 16 * sx, 40.5 * sy)
+      ..cubicTo(16 * sx, 40.5 * sy, 30 * sx, 25.8 * sy, 30 * sx, 15.4 * sy)
+      ..cubicTo(30 * sx, 7.7 * sy, 23.7 * sx, 1.5 * sy, 16 * sx, 1.5 * sy)
+      ..close();
+    canvas.drawShadow(p, const Color(0xFF000000), 2, false);
+    canvas.drawPath(p, Paint()..color = color);
+    canvas.drawPath(p, Paint()
+      ..color = const Color(0x47000000)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2);
+    canvas.drawCircle(Offset(16 * sx, 15.4 * sy), 6.2 * sx, Paint()..color = Colors.white);
+  }
+
+  @override
+  bool shouldRepaint(_PinPainter old) => old.color != color;
 }
