@@ -32,21 +32,22 @@ class VuaThauApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       navigatorKey: navKey,
       navigatorObservers: [routeObserver],
-      // Phẳng: không đổ bóng, không lớp phủ màu M3, góc 6 (ô, nút) / 8 (hộp thoại, bảng)
+      // Hệ thiết kế mới: font Be Vietnam Pro, không lớp phủ màu M3, góc 8 (ô, nút) / 12 (hộp thoại, thẻ)
       theme: ThemeData(
         useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: C.navy, primary: C.navy, secondary: C.amber, surface: Colors.white)
+        fontFamily: 'BeVietnamPro',
+        colorScheme: ColorScheme.fromSeed(seedColor: C.navy, primary: C.blue, secondary: C.amber, surface: Colors.white)
             .copyWith(surfaceTint: Colors.transparent, outline: C.field, outlineVariant: C.line, error: C.bad),
         scaffoldBackgroundColor: C.bg,
         dividerColor: C.line,
         dividerTheme: const DividerThemeData(color: C.line, thickness: 1, space: 1),
-        textSelectionTheme: TextSelectionThemeData(cursorColor: C.navy, selectionColor: C.amber.withValues(alpha: .35), selectionHandleColor: C.amber),
-        progressIndicatorTheme: const ProgressIndicatorThemeData(color: C.navy),
+        textSelectionTheme: TextSelectionThemeData(cursorColor: C.text, selectionColor: C.blue.withValues(alpha: .25), selectionHandleColor: C.blue),
+        progressIndicatorTheme: const ProgressIndicatorThemeData(color: C.blue),
         dialogTheme: DialogThemeData(
           backgroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.card), side: const BorderSide(color: C.line)),
-          titleTextStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.card), side: const BorderSide(color: C.line2)),
+          titleTextStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.2),
           contentTextStyle: const TextStyle(fontSize: 14.5, color: C.muted, height: 1.45),
         ),
         bottomSheetTheme: const BottomSheetThemeData(
@@ -55,18 +56,18 @@ class VuaThauApp extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(R.card))),
         ),
         textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(foregroundColor: C.navy, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl))),
+          style: TextButton.styleFrom(foregroundColor: C.blue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl))),
         ),
         snackBarTheme: SnackBarThemeData(
-          backgroundColor: C.navy,
+          backgroundColor: C.text,
           elevation: 0,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl)),
         ),
         chipTheme: ChipThemeData(
           backgroundColor: Colors.white,
-          side: const BorderSide(color: C.line),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl)),
+          side: const BorderSide(color: C.line2),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
           labelStyle: const TextStyle(fontSize: 13.5, color: C.text),
         ),
         navigationBarTheme: const NavigationBarThemeData(elevation: 0, surfaceTintColor: Colors.transparent, shadowColor: Colors.transparent),

@@ -1,5 +1,6 @@
-// Giao diện dùng chung, cùng bộ màu với web quản lý: sáng, phẳng, viền 1px, không đổ bóng.
-// Màu nhấn vàng chỉ dùng cho 1 nút chính mỗi màn, tab đang chọn và viền ô đang gõ.
+// Giao diện dùng chung, cùng hệ thiết kế với web quản lý (18/11/2026): font Be Vietnam Pro, nền trắng, chữ #222,
+// thanh tiêu đề xanh navy chuyển màu, điểm nhấn vàng #f5b70a, nút chính xanh dương, thẻ bo 12 viền mảnh,
+// nhãn ô nhỏ in hoa, khung thông tin đóng viền kiểu Airbnb.
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -7,28 +8,46 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'api.dart';
 
 abstract final class C {
-  // Thương hiệu
-  static const navy = Color(0xFF0B1F3A), navy2 = Color(0xFF13294B), navy3 = Color(0xFF1E3A64);
-  static const amber = Color(0xFFF5B301), amberBg = Color(0xFFFEF9EB);
+  // Thương hiệu: navy (thanh tiêu đề, khung thương hiệu), vàng (điểm nhấn), xanh dương (nút chính, giai đoạn)
+  static const navy = Color(0xFF002463), navy2 = Color(0xFF003A8C), navy3 = Color(0xFF0B3D91), navyDeep = Color(0xFF001A4D);
+  static const amber = Color(0xFFF5B70A), amberBg = Color(0xFFFFF7E0), amberInk = Color(0xFF0F1E36);
+  static const blue = Color(0xFF1D6FF2), blue2 = Color(0xFF1554C9), blueBg = Color(0xFFEAF1FE);
   // Nền, chữ, viền
-  static const bg = Color(0xFFF5F6F8), card = Colors.white, text = Color(0xFF0B1220), muted = Color(0xFF5B6474);
-  static const subtle = Color(0xFF8A93A3), line = Color(0xFFE3E6EB), field = Color(0xFFCDD2DA);
-  static const soft = Color(0xFFF0F2F5), placeholder = subtle;
+  static const bg = Colors.white, card = Colors.white, text = Color(0xFF222222), muted = Color(0xFF6A6A6A);
+  static const subtle = Color(0xFF8A8A8A), line = Color(0xFFEBEBEB), line2 = Color(0xFFDDDDDD), field = Color(0xFFB0B0B0);
+  static const soft = Color(0xFFF7F7F7), placeholder = subtle, dot = Color(0xFFC4C4C4);
   // Chữ phụ trên nền navy
-  static const heroMuted = Color(0xFF9AA8BD), heroLine = Color(0x1FFFFFFF);
-  // Trạng thái: màu chính + nền nhạt (~8%)
-  static const wait = Color(0xFF2563EB), waitBg = Color(0xFFEEF3FD);
-  static const ok = Color(0xFF15803D), okBg = Color(0xFFECF5EF);
-  static const warn = Color(0xFFB45309), warnBg = Color(0xFFF9F1EB);
-  static const bad = Color(0xFFB91C1C), badBg = Color(0xFFF9EDED);
-  static const done = Color(0xFF0B1F3A), doneBg = Color(0xFFEBEDEF);
-  static const draft = Color(0xFF64748B), draftBg = Color(0xFFF3F4F6);
+  static const heroMuted = Color(0xFFA9B6CC), heroLine = Color(0x1FFFFFFF);
+  // Trạng thái: màu chữ + nền nhạt
+  static const wait = Color(0xFFB4690E), waitBg = Color(0xFFFFF4E5); // chờ duyệt
+  static const ok = Color(0xFF008A05), okBg = Color(0xFFE8F5E9); // đã duyệt
+  static const warn = Color(0xFF222222), warnBg = Color(0xFFF0F0F0); // trả lại
+  static const bad = Color(0xFFC13515), badBg = Color(0xFFFFF0EE); // từ chối
+  static const done = Color(0xFF0B3D91), doneBg = Color(0xFFEAF1FE); // đã thanh toán
+  static const draft = Color(0xFF6A6A6A), draftBg = Color(0xFFF7F7F7);
   static const green = ok;
+  // Chữ cảnh báo (AI đọc, việc còn thiếu): cam, khác "trả lại" (đen)
+  static const alert = Color(0xFFB4690E);
 }
 
-/// Bo góc: ô nhập, nút, nhãn 6; thẻ, khung 8.
+/// Nền navy chuyển màu (thanh tiêu đề, khung thương hiệu), như thanh bên của web.
+const navyGradient = LinearGradient(
+  // Ngang (sáng bên phải): thanh tiêu đề và phần tiền bên dưới nối liền không lộ vết
+  begin: Alignment.centerRight,
+  end: Alignment.centerLeft,
+  colors: [C.navy2, C.navy, C.navyDeep],
+  stops: [0, 0.45, 1],
+);
+
+/// Nút chính: xanh dương chuyển màu.
+const blueGradient = LinearGradient(colors: [C.blue, Color(0xFF1A62E0), C.blue2]);
+
+/// Bóng của thẻ chính.
+const cardShadow = [BoxShadow(color: Color(0x1F000000), blurRadius: 16, offset: Offset(0, 6))];
+
+/// Bo góc: ô nhập, nút 8; thẻ, khung 12.
 abstract final class R {
-  static const ctl = 6.0, card = 8.0;
+  static const ctl = 8.0, card = 12.0;
 }
 
 /// tông: [màu chữ, màu nền]
@@ -39,6 +58,7 @@ const tones = <String, (Color, Color)>{
   'bad': (C.bad, C.badBg),
   'ok': (C.ok, C.okBg),
   'done': (C.done, C.doneBg),
+  'vip': (Color(0xFF8A5A00), C.amberBg),
 };
 
 /// Mã hồ sơ: 81 -> "HS-00081".
@@ -155,13 +175,15 @@ const _monoFallback = ['monospace', 'Roboto Mono', 'Courier'];
 
 abstract final class T {
   static const muted = TextStyle(color: C.muted, fontSize: 13, height: 1.4);
-  static const secT = TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.2, height: 1.3);
+  static const secT = TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.2, height: 1.3);
   static const label = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.text);
   static const hint = TextStyle(fontSize: 12.5, color: C.muted, height: 1.4);
   static const body = TextStyle(fontSize: 15, color: C.text, height: 1.35);
   static const bold = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.1);
-  /// Nhãn mục nhỏ in hoa
-  static const formHead = TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: C.muted, letterSpacing: 0.8);
+  /// Nhãn mục nhỏ in hoa (tiêu đề mục)
+  static const formHead = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: C.muted, letterSpacing: 0.6);
+  /// Nhãn ô trong khung thông tin: 10px đậm, in hoa (viết sẵn chữ hoa)
+  static const cap = TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: C.text, letterSpacing: 0.4);
   /// Số, tiền, giờ: chữ số đều cột
   static const num = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.text, fontFeatures: _tab);
   /// Mã hồ sơ, toạ độ: phông mono
@@ -184,7 +206,7 @@ class VtAppBar extends StatelessWidget {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Container(
-        color: C.navy,
+        decoration: const BoxDecoration(gradient: navyGradient),
         padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 56),
@@ -233,7 +255,7 @@ class Brand extends StatelessWidget {
       );
 }
 
-/// primary: nút chính màu vàng (mỗi màn 1 nút), dark: nút navy, normal: nút trắng viền, danger: nút trắng chữ đỏ.
+/// primary: nút chính xanh dương chuyển màu (mỗi màn 1 nút), dark: nút navy, normal: nút trắng viền đen, danger: nút trắng chữ đỏ.
 enum BtnKind { primary, dark, normal, danger }
 
 class Btn extends StatelessWidget {
@@ -247,49 +269,52 @@ class Btn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (bg, fg, border) = switch (kind) {
-      BtnKind.primary => (C.amber, C.navy, C.amber),
+      BtnKind.primary => (C.blue, Colors.white, Colors.transparent),
       BtnKind.dark => (C.navy, Colors.white, C.navy),
-      BtnKind.normal => (Colors.white, C.text, C.field),
-      BtnKind.danger => (Colors.white, C.bad, C.field),
+      BtnKind.normal => (Colors.white, C.text, C.text),
+      BtnKind.danger => (Colors.white, C.bad, C.line2),
     };
     final off = disabled || busy;
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: BorderSide(color: border));
+    final body = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, spacing: 8, children: [
+          if (busy)
+            SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.4, color: fg))
+          else if (icon != null)
+            Ic(icon!, color: fg, size: 18),
+          Flexible(
+            child: Text(title,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: fg, letterSpacing: -0.1)),
+          ),
+        ]),
+      ),
+    );
     return Opacity(
       opacity: disabled ? 0.45 : 1,
       child: Material(
-        color: bg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: BorderSide(color: border)),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(R.ctl),
-          onTap: off ? null : onPressed,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, mainAxisSize: MainAxisSize.min, spacing: 8, children: [
-                if (busy)
-                  SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2.4, color: fg))
-                else if (icon != null)
-                  Ic(icon!, color: fg, size: 18),
-                Flexible(
-                  child: Text(title,
-                      maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: fg, letterSpacing: -0.1)),
-                ),
-              ]),
-            ),
-          ),
+        color: kind == BtnKind.primary ? Colors.transparent : bg,
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: kind == BtnKind.primary ? BoxDecoration(gradient: blueGradient, borderRadius: BorderRadius.circular(R.ctl)) : null,
+          child: InkWell(borderRadius: BorderRadius.circular(R.ctl), onTap: off ? null : onPressed, child: body),
         ),
       ),
     );
   }
 }
 
-/// Khung trắng viền 1px, các con xếp dọc cách nhau [gap]. Không đổ bóng.
+/// Khung trắng bo 12, viền mảnh, các con xếp dọc cách nhau [gap]. [raised]: đổ bóng (thẻ chính).
 class Box extends StatelessWidget {
-  const Box({super.key, required this.children, this.padding = const EdgeInsets.all(16), this.gap = 12, this.onTap});
+  const Box({super.key, required this.children, this.padding = const EdgeInsets.all(16), this.gap = 12, this.onTap, this.raised = false});
   final List<Widget> children;
   final EdgeInsets padding;
   final double gap;
   final VoidCallback? onTap;
+  final bool raised;
 
   @override
   Widget build(BuildContext context) {
@@ -297,12 +322,76 @@ class Box extends StatelessWidget {
       padding: padding,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, spacing: gap, children: children),
     );
-    return Material(
+    final card = Material(
       color: C.card,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.card), side: const BorderSide(color: C.line)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.card), side: const BorderSide(color: C.line2)),
       clipBehavior: Clip.antiAlias,
       child: onTap == null ? content : InkWell(onTap: onTap, child: content),
     );
+    if (!raised) return card;
+    return DecoratedBox(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(R.card), boxShadow: cardShadow),
+      child: card,
+    );
+  }
+}
+
+/// Khung thông tin đóng viền kiểu Airbnb: các hàng, mỗi hàng 1 hoặc nhiều ô, ngăn bằng vạch 1px #b0b0b0.
+class FieldBox extends StatelessWidget {
+  const FieldBox({super.key, required this.rows, this.radius = 12, this.firstShaded = false});
+  final List<List<Widget>> rows;
+  final double radius;
+
+  /// Hàng đầu nền xám nhạt (ô quan trọng nhất)
+  final bool firstShaded;
+  @override
+  Widget build(BuildContext context) => Container(
+        decoration: BoxDecoration(border: Border.all(color: C.field), borderRadius: BorderRadius.circular(radius)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          for (var i = 0; i < rows.length; i++)
+            Container(
+              decoration: BoxDecoration(
+                color: firstShaded && i == 0 ? C.soft : null,
+                border: i > 0 ? const Border(top: BorderSide(color: C.field)) : null,
+              ),
+              child: IntrinsicHeight(
+                child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  for (var k = 0; k < rows[i].length; k++)
+                    Expanded(
+                      child: Container(
+                        decoration: k > 0 ? const BoxDecoration(border: Border(left: BorderSide(color: C.field))) : null,
+                        child: rows[i][k],
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+        ]),
+      );
+}
+
+/// 1 ô trong FieldBox: nhãn nhỏ in hoa + giá trị.
+class FieldCell extends StatelessWidget {
+  const FieldCell(this.label, this.value, {super.key, this.big = false, this.onTap, this.child});
+  final String label, value;
+  final bool big;
+  final VoidCallback? onTap;
+  final Widget? child;
+  @override
+  Widget build(BuildContext context) {
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
+        Text(label.toUpperCase(), style: T.cap),
+        child ??
+            Text(value.isNotEmpty ? value : '—',
+                style: big
+                    ? const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: C.text, height: 1.3)
+                    : const TextStyle(fontSize: 15, color: C.text, height: 1.35)),
+      ]),
+    );
+    return onTap == null ? body : InkWell(onTap: onTap, child: body);
   }
 }
 
@@ -356,7 +445,7 @@ class Field extends StatelessWidget {
     OutlineInputBorder b(Color c, [double w = 1]) => OutlineInputBorder(borderRadius: BorderRadius.circular(R.ctl), borderSide: BorderSide(color: c, width: w));
     final err = error != null && error!.isNotEmpty;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 6, children: [
-      Text(label, style: T.label),
+      Text(label.toUpperCase(), style: T.cap),
       TextField(
         controller: controller,
         obscureText: obscure,
@@ -378,15 +467,15 @@ class Field extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           suffixIcon: suffix,
           enabledBorder: b(err ? C.bad : C.field),
-          focusedBorder: b(err ? C.bad : C.amber, 2),
+          focusedBorder: b(err ? C.bad : C.text, 1.5),
         ),
       ),
       if (err)
         Text(error!, style: T.hint.copyWith(color: C.bad))
       else if (ai)
         const Row(spacing: 6, children: [
-          Ic('spark', size: 13, color: C.warn),
-          Text('AI đọc từ ảnh, kiểm tra lại', style: TextStyle(fontSize: 12.5, color: C.warn)),
+          Ic('spark', size: 13, color: C.alert),
+          Text('AI đọc từ ảnh, kiểm tra lại', style: TextStyle(fontSize: 12.5, color: C.alert)),
         ])
       else if (hint != null)
         Text(hint!, style: T.hint),
@@ -394,7 +483,7 @@ class Field extends StatelessWidget {
   }
 }
 
-/// Nhãn trạng thái: chấm vuông 8px (hoặc icon) + chữ màu trạng thái trên nền nhạt.
+/// Nhãn trạng thái: viên thuốc bo tròn, chấm tròn 6px (hoặc icon) + chữ màu trạng thái trên nền nhạt.
 class Pill extends StatelessWidget {
   const Pill(this.text, {super.key, required this.tone, this.icon});
   final String text, tone;
@@ -403,14 +492,14 @@ class Pill extends StatelessWidget {
   Widget build(BuildContext context) {
     final (fg, bg) = tones[tone] ?? tones['draft']!;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(4)),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
       child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
         if (icon != null)
           Ic(icon!, size: 12, color: fg)
         else
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: fg, borderRadius: BorderRadius.circular(1.5))),
-        Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg, height: 1.2)),
+          Container(width: 6, height: 6, decoration: BoxDecoration(color: fg, shape: BoxShape.circle)),
+        Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg, height: 1.2))),
       ]),
     );
   }
@@ -437,10 +526,10 @@ class Segs extends StatelessWidget {
         for (var k = 0; k < total; k++)
           Expanded(
             child: Container(
-              height: 6,
+              height: 4,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(1),
-                color: k < n ? (full ? C.green : C.amber) : (dark ? Colors.white.withValues(alpha: .18) : C.line),
+                borderRadius: BorderRadius.circular(2),
+                color: k < n ? (full ? C.green : C.blue) : (dark ? Colors.white.withValues(alpha: .18) : C.line),
               ),
             ),
           ),
@@ -533,7 +622,7 @@ class MoneyHero extends StatelessWidget {
   final List<(String, num)> stats;
   @override
   Widget build(BuildContext context) => Container(
-        color: C.navy,
+        decoration: const BoxDecoration(gradient: navyGradient),
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 44),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
           Text(label.toUpperCase(), style: T.formHead.copyWith(color: C.heroMuted)),

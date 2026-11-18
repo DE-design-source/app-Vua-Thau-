@@ -15,9 +15,9 @@ class AuthTop extends StatelessWidget {
   @override
   Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.light,
-        // Nền navy + lưới mảnh kiểu bản vẽ; chữ canh trái
+        // Nền navy chuyển màu + lưới mảnh kiểu bản vẽ; chữ canh trái
         child: Container(
-          color: C.navy,
+          decoration: const BoxDecoration(gradient: navyGradient),
           child: CustomPaint(
             painter: const _Grid(),
             child: Padding(

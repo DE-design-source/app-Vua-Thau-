@@ -140,16 +140,16 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
       selected: on,
       button: true,
       child: Material(
-        color: on ? C.navy : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: BorderSide(color: on ? C.navy : C.line)),
+        color: on ? C.text : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999), side: BorderSide(color: on ? C.text : C.line2)),
         child: InkWell(
-          borderRadius: BorderRadius.circular(R.ctl),
+          borderRadius: BorderRadius.circular(999),
           onTap: () => setLoc(k),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
               Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: on ? Colors.white : C.text)),
-              Text('$n', style: T.num.copyWith(fontSize: 12.5, color: on ? C.amber : C.subtle)),
+              Text('$n', style: T.num.copyWith(fontSize: 12.5, color: on ? Colors.white : C.subtle)),
             ]),
           ),
         ),
@@ -189,14 +189,17 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
                   Row(spacing: 8, children: [
-                    Text(hsId(id), style: T.mono),
-                    Text('$valid/$n ảnh đạt · ${vnDate(str(r['created_at']))}', style: T.hint.copyWith(color: C.subtle, fontFeatures: const [FontFeature.tabularFigures()])),
+                    Text(hsId(id), style: T.num.copyWith(fontSize: 12.5, color: C.muted)),
+                    Flexible(
+                      child: Text('$valid/$n ảnh đạt · ${vnDate(str(r['created_at']))}',
+                          maxLines: 1, overflow: TextOverflow.ellipsis, style: T.hint.copyWith(color: C.subtle, fontFeatures: const [FontFeature.tabularFigures()])),
+                    ),
                   ]),
                   Text(str(r['address']).isNotEmpty ? str(r['address']) : 'Chưa có địa chỉ',
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: C.text)),
                   Wrap(spacing: 6, runSpacing: 4, children: [
                     StatusBadge(status),
-                    if (r['vip'] == true) const Pill('VIP · chụp đầu tiên', tone: 'warn'),
+                    if (r['vip'] == true) const Pill('VIP · chụp đầu tiên', tone: 'vip', icon: 'bolt'),
                     if (bad > 0 && const ['nhap', 'tra_lai', 'cho_duyet'].contains(status)) Pill('$bad ảnh lỗi', tone: 'bad'),
                   ]),
                 ]),

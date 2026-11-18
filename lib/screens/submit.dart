@@ -26,9 +26,9 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
       const VtAppBar(title: 'Nộp hồ sơ mới', sub: 'Chụp ngay hoặc chọn ảnh có sẵn', right: TopActions()),
       Expanded(
         child: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 32), children: [
-          // Cách khuyên dùng: khung navy phẳng + 1 nút chính màu vàng
+          // Cách khuyên dùng: khung navy chuyển màu + 1 nút chính
           Container(
-            decoration: BoxDecoration(color: C.navy, borderRadius: BorderRadius.circular(R.card)),
+            decoration: BoxDecoration(gradient: navyGradient, borderRadius: BorderRadius.circular(R.card), boxShadow: cardShadow),
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: [
               const Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 12, children: [

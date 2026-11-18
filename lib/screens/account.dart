@@ -142,7 +142,7 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
         const SizedBox(height: 12),
         _fold('bank', 'bank', 'Tài khoản nhận tiền', [
           if (str(b['owner']).isEmpty && str(user['bank']).isNotEmpty)
-            Text('Đang lưu: “${str(user['bank'])}”. Nhập lại theo 3 ô dưới để kế toán chuyển nhanh, đúng.', style: T.muted.copyWith(color: C.warn)),
+            Text('Đang lưu: “${str(user['bank'])}”. Nhập lại theo 3 ô dưới để kế toán chuyển nhanh, đúng.', style: T.muted.copyWith(color: C.alert)),
           BankFields(c: bank!),
           Btn('Lưu tài khoản', kind: BtnKind.dark, busy: op == 'bank', onPressed: () => save('bank', '/me/bank', bank!.toJson())),
         ]),

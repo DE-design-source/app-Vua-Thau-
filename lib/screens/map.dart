@@ -25,7 +25,7 @@ final Future<vmt.Style> _mapStyle = vmt.StyleReader(uri: '$host/map-style.json')
 // Công trình theo lần chụp: chưa quá số ngày chặn trùng vàng nhạt, quá thì xanh lá (cần cập nhật, được chụp lại)
 // vàng: chụp chưa quá hạn (giống web); xanh lá tươi: cần cập nhật
 const ageFresh = Color(0xFFF5B301), ageFreshLine = Color(0xFFB7791F), ageStale = Color(0xFF22C55E);
-const minePin = C.wait; // công trình của mình: ghim xanh dương
+const minePin = C.blue; // công trình của mình: ghim xanh dương
 const _radii = [500, 1000, 2000, 5000];
 
 class MapScreen extends StatefulWidget {
@@ -248,8 +248,8 @@ class _MapScreenState extends State<MapScreen> with PageData {
                     point: LatLng((place!['lat'] as num).toDouble(), (place!['lng'] as num).toDouble()),
                     radius: radius.toDouble(),
                     useRadiusInMeter: true,
-                    color: C.wait.withValues(alpha: .07),
-                    borderColor: C.wait,
+                    color: C.blue.withValues(alpha: .07),
+                    borderColor: C.blue,
                     borderStrokeWidth: 2,
                   ),
                 ]),
@@ -285,7 +285,7 @@ class _MapScreenState extends State<MapScreen> with PageData {
                     height: 22,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: C.wait,
+                        color: C.blue,
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 3),
                         boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 4)],

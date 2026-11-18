@@ -30,6 +30,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
   final touched = <String>{};
   String busy2 = '';
   bool showLog = false;
+  bool allPhotos = false;
   Timer? poll;
 
   bool get reading => d != null && (d!['house'] as Map)['ai_state'] == 'dang_doc';
@@ -161,9 +162,13 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
           error: badFields.contains(k) ? 'Số điện thoại chưa đúng: 10 số, bắt đầu bằng 0.' : null,
         );
 
+    final addr = str(h['address']);
+    final province = str(h['province_name']);
+    final showGrid = allPhotos || (editable && issues.isNotEmpty);
+
     return Scaffold(
       body: Column(children: [
-        VtAppBar(title: hsId(widget.id), sub: cfg.statusLabel(status), back: true),
+        VtAppBar(title: 'Chi tiết hồ sơ', sub: hsId(widget.id), back: true),
         Expanded(
           child: RefreshIndicator(
             onRefresh: load,
@@ -171,11 +176,50 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               children: _gap([
+                // ---- Đầu trang: mã, trạng thái, AI, địa chỉ, giai đoạn ----
+                Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 8, children: [
+                  Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    Text(hsId(widget.id), style: T.num.copyWith(fontSize: 13, color: C.muted)),
+                    StatusBadge(status),
+                    if (reading)
+                      const Pill('AI đang đọc ảnh', tone: 'wait', icon: 'spark')
+                    else if (clean && valid > 0)
+                      const Pill('AI đã xác minh', tone: 'ok', icon: 'shield'),
+                  ]),
+                  Text(addr.isNotEmpty ? addr : 'Chưa có địa chỉ công trình',
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, height: 1.25, letterSpacing: -0.3, color: addr.isNotEmpty ? C.text : C.subtle)),
+                  Wrap(spacing: 8, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    if (stage.isNotEmpty) Pill(stage, tone: 'done', icon: 'building'),
+                    if (province.isNotEmpty) Text(province, style: T.muted),
+                    if (str(h['floors']).isNotEmpty && str(h['floors']) != '0') Text('· ${str(h['floors'])} tầng', style: T.muted),
+                  ]),
+                ]),
+
                 if (status == 'tra_lai' && str(h['note']).isNotEmpty) Note(tone: 'warn', icon: 'undo', title: 'Admin trả lại, bạn cần sửa', text: str(h['note'])),
                 if (status == 'tu_choi')
                   Note(tone: 'bad', icon: 'ban', title: 'Hồ sơ bị từ chối', text: str(h['note']).isNotEmpty ? str(h['note']) : 'Không có lý do.'),
                 if (status == 'cho_duyet')
                   const Note(tone: 'wait', icon: 'clock', title: 'Đã gửi, đang chờ admin duyệt', text: 'Bạn sẽ thấy kết quả ngay trên trang này.'),
+
+                // ---- Ảnh: khối ghép + xem tất cả ----
+                if (ps.isNotEmpty) _mosaic(ps, showGrid),
+                if (showGrid) ...[
+                  Sec('Ảnh · $valid/${ps.length} đạt', right: 'tối đa ${cfg.maxPhotos}'),
+                  PhotoGrid(children: [
+                    for (var k = 0; k < ps.length; k++) _cell(ps, k, editable),
+                  ]),
+                ],
+                if (editable && ps.length < cfg.maxPhotos) ...[
+                  Btn('Chụp thêm bằng camera',
+                      icon: 'camera', kind: BtnKind.dark, onPressed: () => push(context, CameraScreen(hid: widget.id, have: ps.length))),
+                  PhotoPicker(
+                    path: '/houses/${widget.id}/photos',
+                    have: ps.length,
+                    valid: valid,
+                    onUploaded: (_) => load(),
+                    title: 'Thêm ảnh có sẵn${valid < min ? ' · cần thêm ${min - valid} ảnh đạt' : ''}',
+                  ),
+                ],
 
                 // ---- Phản hồi AI + luật kiểm ảnh ----
                 Box(children: reading
@@ -184,7 +228,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                           const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5)),
                           Expanded(
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                              Text('AI đang kiểm tra ${ps.length} ảnh…', style: T.secT),
+                              Text('AI đang kiểm tra ${ps.length} ảnh…', style: T.bold),
                               const Text('Đọc giờ chụp, địa chỉ, bảng hiệu nhà thầu. Trang tự cập nhật, bạn cứ điền thông tin.', style: T.muted),
                             ]),
                           ),
@@ -192,10 +236,10 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                       ]
                     : [
                         Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 12, children: [
-                          Avatar(size: 36, color: clean ? C.okBg : C.warnBg, child: Ic(clean ? 'shield' : 'spark', color: clean ? C.ok : C.warn, size: 18)),
+                          Avatar(size: 36, color: clean ? C.okBg : C.waitBg, child: Ic(clean ? 'shield' : 'spark', color: clean ? C.ok : C.alert, size: 18)),
                           Expanded(
                             child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                              Text(clean ? 'AI kiểm tra: tất cả đều đạt' : 'AI phản hồi: ${issues.length + fieldsTodo.length} điểm cần xem', style: T.secT),
+                              Text(clean ? 'AI kiểm tra: tất cả đều đạt' : 'AI phản hồi: ${issues.length + fieldsTodo.length} điểm cần xem', style: T.bold),
                               Text(
                                 '$valid/${ps.length} ảnh đạt · giờ chụp, vị trí, công trình, ảnh trùng${h['ai_state'] == 'loi' ? ' · AI chưa đọc được chữ trên ảnh lần này' : ''}',
                                 style: T.muted,
@@ -213,38 +257,42 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                         if (editable && clean) const _Line(icon: 'check', color: C.ok, text: 'Đủ ảnh và thông tin. Bấm Gửi duyệt bên dưới.'),
                       ]),
 
-                // ---- Ảnh ----
-                Sec('Ảnh · $valid/${ps.length} đạt', right: 'tối đa ${cfg.maxPhotos}'),
-                if (ps.isNotEmpty)
-                  PhotoGrid(children: [
-                    for (var k = 0; k < ps.length; k++) _cell(ps, k, editable),
-                  ]),
-                if (editable && ps.length < cfg.maxPhotos) ...[
-                  Btn('Chụp thêm bằng camera',
-                      icon: 'camera', kind: BtnKind.dark, onPressed: () => push(context, CameraScreen(hid: widget.id, have: ps.length))),
-                  PhotoPicker(
-                    path: '/houses/${widget.id}/photos',
-                    have: ps.length,
-                    valid: valid,
-                    onUploaded: (_) => load(),
-                    title: 'Thêm ảnh có sẵn${valid < min ? ' · cần thêm ${min - valid} ảnh đạt' : ''}',
-                  ),
-                ],
+                // ---- Tiến độ thi công: 8 mốc ----
+                if (cfg.stages.isNotEmpty) _milestones(),
 
                 // ---- Tiền ----
-                Box(children: [
-                  Row(children: [
-                    Expanded(
-                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        Text((editable ? 'Tiền dự kiến' : 'Số tiền hồ sơ').toUpperCase(), style: T.formHead),
-                        Text(money(shown), style: T.num.copyWith(fontSize: 24, letterSpacing: -0.5)),
-                      ]),
-                    ),
-                    Text('$valid ảnh đạt\n$min ảnh ${money(cfg.payFor(min))} · ${min + 1}+ ảnh ${money(cfg.payFor(min + 1))}',
-                        textAlign: TextAlign.right, style: T.hint.copyWith(fontFeatures: const [FontFeature.tabularFigures()])),
-                  ]),
-                  if (editable) Segs(n: valid, total: min + 1),
+                FieldBox(firstShaded: true, rows: [
+                  [
+                    FieldCell(editable ? 'Tiền dự kiến' : 'Số tiền hồ sơ', '',
+                        child: Text(money(shown), style: T.num.copyWith(fontSize: 24, letterSpacing: -0.5))),
+                  ],
+                  [
+                    FieldCell('Ảnh đạt', '$valid / ${ps.length}'),
+                    FieldCell('$min ảnh', money(cfg.payFor(min))),
+                    FieldCell('${min + 1}+ ảnh', money(cfg.payFor(min + 1))),
+                  ],
                 ]),
+                if (editable) Segs(n: valid, total: min + 1),
+
+                // ---- Tiến trình duyệt ----
+                if (steps.isNotEmpty) ...[
+                  const Sec('Tiến trình duyệt'),
+                  Box(gap: 14, children: [
+                    Row(spacing: 4, children: [
+                      for (final x in steps)
+                        Expanded(
+                          child: Container(
+                            height: 4,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(2),
+                              color: switch (str(x['state'])) { 'done' => C.ok, 'current' => C.blue, 'bad' => C.bad, _ => C.line },
+                            ),
+                          ),
+                        ),
+                    ]),
+                    Column(children: [for (var k = 0; k < steps.length; k++) _step(steps[k], k, steps.length)]),
+                  ]),
+                ],
 
                 // ---- Thông tin công trình ----
                 const Sec('Thông tin công trình'),
@@ -254,8 +302,8 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                     infoField('floors', 'Số tầng', kb: TextInputType.number),
                     Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 8, children: [
                       Row(spacing: 6, children: [
-                        const Text('Giai đoạn thi công', style: T.label),
-                        if (aiTag.contains('stage')) const Pill('AI đoán', tone: 'warn', icon: 'spark'),
+                        const Text('GIAI ĐOẠN THI CÔNG', style: T.cap),
+                        if (aiTag.contains('stage')) const Pill('AI đoán', tone: 'wait', icon: 'spark'),
                       ]),
                       for (final g in cfg.stages) _stageOpt(g),
                     ]),
@@ -264,27 +312,28 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                     infoField('contractor_phone', 'SĐT nhà thầu', kb: TextInputType.phone),
                   ])
                 else
-                  Box(gap: 14, children: [
-                    _Fact(
-                      label: 'Địa chỉ',
-                      value: str(h['address']),
-                      link: h['lat'] != null ? ('Xem Google Maps', gmapUrl(h['lat'], h['lng'])) : null,
-                      copy: h['lat'] != null ? gmapUrl(h['lat'], h['lng']) : null,
-                    ),
+                  FieldBox(rows: [
+                    [
+                      _Fact(
+                        label: 'Địa chỉ',
+                        value: addr,
+                        link: h['lat'] != null ? ('Xem Google Maps', gmapUrl(h['lat'], h['lng'])) : null,
+                        copy: h['lat'] != null ? gmapUrl(h['lat'], h['lng']) : null,
+                      ),
+                    ],
                     // Tỉnh mới (34 tỉnh, thành từ 1/7/2025), máy chủ tự gán theo toạ độ / địa chỉ
-                    if (str(h['province_name']).isNotEmpty) _Fact(label: 'Tỉnh, thành', value: str(h['province_name'])),
-                    _Fact(label: 'Số tầng', value: str(h['floors'])),
-                    _Fact(label: 'Giai đoạn', value: str(h['stage'])),
-                    _Fact(
-                      label: 'Nhà thầu',
-                      value: str(h['contractor_name']),
-                      link: str(h['contractor_phone']).isNotEmpty ? (str(h['contractor_phone']), 'tel:${str(h['contractor_phone'])}') : null,
-                    ),
+                    if (province.isNotEmpty) [FieldCell('Tỉnh, thành', province)],
+                    [FieldCell('Số tầng', str(h['floors'])), FieldCell('Giai đoạn', str(h['stage']))],
+                    [
+                      _Fact(
+                        label: 'Nhà thầu',
+                        value: str(h['contractor_name']),
+                        link: str(h['contractor_phone']).isNotEmpty ? (str(h['contractor_phone']), 'tel:${str(h['contractor_phone'])}') : null,
+                      ),
+                    ],
                   ]),
 
-                // ---- Tiến trình + lịch sử ----
-                const Sec('Tiến trình'),
-                Box(gap: 0, children: [for (var k = 0; k < steps.length; k++) _step(steps[k], k, steps.length)]),
+                // ---- Lịch sử ----
                 if (logs.isNotEmpty)
                   Box(children: [
                     InkWell(
@@ -319,13 +368,13 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 8, children: [
               Row(spacing: 6, children: [
                 if (reading)
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: C.warn))
+                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: C.alert))
                 else
-                  Ic(ready ? 'check' : 'alert', color: ready ? C.ok : C.warn, size: 16),
+                  Ic(ready ? 'check' : 'alert', color: ready ? C.ok : C.alert, size: 16),
                 Expanded(
                   child: Text(
                     reading ? 'AI đang kiểm tra ảnh…' : todo.isNotEmpty ? 'Còn ${todo.length} mục cần bổ sung' : 'Đủ điều kiện · ${money(pay)}',
-                    style: TextStyle(color: ready ? C.ok : C.warn, fontWeight: FontWeight.w600, fontSize: 14),
+                    style: TextStyle(color: ready ? C.ok : C.alert, fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                 ),
               ]),
@@ -340,6 +389,107 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
           ),
       ]),
     );
+  }
+
+  void _open(List<Json> ps, int k) =>
+      Navigator.of(context).push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => Lightbox(ps: ps, at: k)));
+
+  /// Ảnh ghép kiểu Airbnb: 1 ảnh lớn + tối đa 4 ảnh nhỏ, nút "Hiển thị tất cả" ở góc.
+  Widget _mosaic(List<Json> ps, bool open) {
+    final n = ps.length;
+    Widget tile(int k) => Semantics(
+          button: true,
+          label: 'Xem ảnh ${k + 1}',
+          child: GestureDetector(onTap: () => _open(ps, k), child: NetPhoto.id(asInt(ps[k]['id']))),
+        );
+    Widget col(List<int> ks) => Column(spacing: 4, crossAxisAlignment: CrossAxisAlignment.stretch, children: [for (final k in ks) Expanded(child: tile(k))]);
+    final Widget body = switch (n) {
+      1 => tile(0),
+      2 => Row(spacing: 4, crossAxisAlignment: CrossAxisAlignment.stretch, children: [Expanded(child: tile(0)), Expanded(child: tile(1))]),
+      3 || 4 => Row(spacing: 4, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(flex: 2, child: tile(0)),
+          Expanded(child: col([for (var k = 1; k < n; k++) k])),
+        ]),
+      _ => Row(spacing: 4, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(flex: 2, child: tile(0)),
+          Expanded(child: col([1, 3])),
+          Expanded(child: col([2, 4])),
+        ]),
+    };
+    return SizedBox(
+      height: 232,
+      child: Stack(fit: StackFit.expand, children: [
+        ClipRRect(borderRadius: BorderRadius.circular(R.card), child: body),
+        Positioned(
+          right: 10,
+          bottom: 10,
+          child: Material(
+            color: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: const BorderSide(color: C.text)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(R.ctl),
+              onTap: () => setState(() => allPhotos = !open),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
+                  const Ic('image', size: 15),
+                  Text(open ? 'Thu gọn ảnh' : 'Hiển thị tất cả $n ảnh', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.text)),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  /// Tiến độ thi công: các mốc (cfg.stages, 8 bước) nối bằng vạch; mốc đã qua tô navy, mốc hiện tại viền xanh.
+  Widget _milestones() {
+    final gs = cfg.stages;
+    final at = gs.indexOf(stage);
+    Widget dot(int k) {
+      final done = k < at, cur = k == at;
+      return Tooltip(
+        message: gs[k],
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: done ? C.navy3 : Colors.white,
+            border: Border.all(color: done ? C.navy3 : cur ? C.blue : C.dot, width: cur ? 2.5 : 1.5),
+          ),
+          alignment: Alignment.center,
+          child: done
+              ? const Ic('check', color: Colors.white, size: 12, stroke: 3)
+              : Text('${k + 1}', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: cur ? C.blue : C.subtle)),
+        ),
+      );
+    }
+
+    return Box(raised: true, gap: 14, children: [
+      Row(children: [
+        const Expanded(child: Text('Tiến độ thi công', style: T.bold)),
+        Text(at >= 0 ? 'Mốc ${at + 1}/${gs.length}' : 'Chưa chọn giai đoạn', style: T.hint),
+      ]),
+      Semantics(
+        label: at >= 0 ? 'Giai đoạn ${at + 1} trên ${gs.length}: ${gs[at]}' : 'Chưa chọn giai đoạn',
+        child: Row(children: [
+          for (var k = 0; k < gs.length; k++) ...[
+            if (k > 0) Expanded(child: Container(height: 2, color: k <= at ? C.navy3 : C.line)),
+            dot(k),
+          ],
+        ]),
+      ),
+      if (at >= 0)
+        Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
+          Wrap(spacing: 8, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            Text(gs[at], style: T.bold),
+            Pill(at == gs.length - 1 ? 'Đã bàn giao' : 'Đang thi công', tone: at == gs.length - 1 ? 'ok' : 'done'),
+          ]),
+          if (at < gs.length - 1) Text('Tiếp theo: ${gs[at + 1]}', style: T.muted),
+        ]),
+    ]);
   }
 
   List<Widget> _gap(List<Widget> xs) => [
@@ -392,8 +542,8 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
       inMutuallyExclusiveGroup: true,
       checked: on,
       child: Material(
-        color: on ? C.soft : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: BorderSide(color: on ? C.navy : C.field, width: on ? 1.5 : 1)),
+        color: on ? C.blueBg : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl), side: BorderSide(color: on ? C.blue : C.field, width: on ? 1.5 : 1)),
         child: InkWell(
           borderRadius: BorderRadius.circular(R.ctl),
           onTap: () => setState(() {
@@ -406,9 +556,9 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
               Container(
                 width: 20,
                 height: 20,
-                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: on ? C.navy : C.placeholder, width: 2)),
+                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: on ? C.blue : C.placeholder, width: 2)),
                 alignment: Alignment.center,
-                child: on ? Container(width: 10, height: 10, decoration: const BoxDecoration(color: C.navy, shape: BoxShape.circle)) : null,
+                child: on ? Container(width: 10, height: 10, decoration: const BoxDecoration(color: C.blue, shape: BoxShape.circle)) : null,
               ),
               Expanded(child: Text(g, style: T.body)),
             ]),
@@ -420,20 +570,20 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
 
   Widget _step(Json x, int k, int n) {
     final state = str(x['state']);
-    final col = switch (state) { 'done' => C.ok, 'current' => C.amber, 'bad' => C.bad, _ => C.field };
+    final col = switch (state) { 'done' => C.ok, 'current' => C.blue, 'bad' => C.bad, _ => C.dot };
     return IntrinsicHeight(
       child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: [
         Column(children: [
           Container(
             width: 26,
             height: 26,
-            decoration: BoxDecoration(color: state == 'todo' ? Colors.white : col, borderRadius: BorderRadius.circular(R.ctl), border: Border.all(color: col, width: 1.5)),
+            decoration: BoxDecoration(color: state == 'done' || state == 'bad' ? col : Colors.white, shape: BoxShape.circle, border: Border.all(color: col, width: state == 'current' ? 2.5 : 1.5)),
             alignment: Alignment.center,
             child: state == 'done'
                 ? const Ic('check', color: Colors.white, size: 15, stroke: 3)
                 : state == 'bad'
                     ? const Ic('x', color: Colors.white, size: 15, stroke: 3)
-                    : Text('0${k + 1}', style: T.mono.copyWith(fontWeight: FontWeight.w600, color: state == 'current' ? C.navy : C.subtle)),
+                    : Text('${k + 1}', style: T.num.copyWith(fontSize: 12, color: state == 'current' ? C.blue : C.subtle)),
           ),
           if (k < n - 1) Expanded(child: Container(width: 1.5, constraints: const BoxConstraints(minHeight: 16), color: state == 'done' ? C.ok : C.line)),
         ]),
@@ -474,14 +624,16 @@ class _Fact extends StatelessWidget {
   /// Có: thêm nút "Chép link" bên cạnh link (để gửi qua Zalo...)
   final String? copy;
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-        Text(label.toUpperCase(), style: T.formHead),
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
+        Text(label.toUpperCase(), style: T.cap),
         Text(value.isNotEmpty ? value : '—', style: T.body),
         if (link != null)
           Wrap(spacing: 16, children: [
             GestureDetector(
               onTap: () => launchUrl(Uri.parse(link!.$2), mode: LaunchMode.externalApplication),
-              child: Text(link!.$1, style: const TextStyle(color: C.navy3, fontWeight: FontWeight.w600, fontSize: 15)),
+              child: Text(link!.$1, style: const TextStyle(color: C.blue, fontWeight: FontWeight.w600, fontSize: 15, decoration: TextDecoration.underline)),
             ),
             if (copy != null)
               GestureDetector(
@@ -489,10 +641,10 @@ class _Fact extends StatelessWidget {
                   await Clipboard.setData(ClipboardData(text: copy!));
                   toast('Đã chép link Google Maps, dán vào Zalo để gửi');
                 },
-                child: const Text('Chép link', style: TextStyle(color: C.navy3, fontWeight: FontWeight.w600, fontSize: 15)),
+                child: const Text('Chép link', style: TextStyle(color: C.blue, fontWeight: FontWeight.w600, fontSize: 15, decoration: TextDecoration.underline)),
               ),
           ]),
-      ]);
+      ]));
 }
 
 /// Xem ảnh lớn, vuốt ngang qua ảnh khác, phóng to được, kèm giờ chụp, vị trí, lỗi.
