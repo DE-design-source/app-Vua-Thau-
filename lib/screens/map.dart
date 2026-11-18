@@ -64,7 +64,18 @@ class _MapScreenState extends State<MapScreen> with PageData {
     setState(() => finding = true);
     try {
       final j = await api('/geo/search?q=${Uri.encodeQueryComponent(s)}');
-      final ps = ((j['places'] as List?) ?? const []).cast<Json>();
+      // công trình của mình khớp tên / SĐT nhà thầu, địa chỉ (máy chủ chỉ trả của mình) + địa điểm trên bản đồ
+      final sites = [
+        for (final x in ((j['sites'] as List?) ?? const []).cast<Json>())
+          <String, dynamic>{
+            'name': str(x['contractor']).isNotEmpty ? str(x['contractor']) : str(x['address']),
+            'sub': str(x['contractor']).isNotEmpty ? str(x['address']) : '',
+            'lat': x['lat'],
+            'lng': x['lng'],
+            'site': true,
+          },
+      ];
+      final ps = [...sites, ...((j['places'] as List?) ?? const []).cast<Json>()];
       if (!mounted) return;
       setState(() {
         hits = ps;
@@ -350,7 +361,7 @@ class _MapScreenState extends State<MapScreen> with PageData {
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => find(),
               decoration: const InputDecoration(
-                  hintText: 'Tìm địa điểm: số nhà, đường, phường…', border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12)),
+                  hintText: 'Tìm địa chỉ, công ty, nhà thầu…', border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12)),
             ),
           ),
           if (finding)
@@ -375,7 +386,13 @@ class _MapScreenState extends State<MapScreen> with PageData {
           constraints: const BoxConstraints(maxHeight: 240),
           child: ListView(shrinkWrap: true, padding: EdgeInsets.zero, children: [
             for (final h in hits!)
-              ListTile(dense: true, title: Text(str(h['name']), maxLines: 2, overflow: TextOverflow.ellipsis), onTap: () => pick(h)),
+              ListTile(
+                dense: true,
+                leading: Icon(h['site'] == true ? Icons.home_work_outlined : Icons.place_outlined, size: 20, color: h['site'] == true ? minePin : C.muted),
+                title: Text(str(h['name']), maxLines: 2, overflow: TextOverflow.ellipsis),
+                subtitle: str(h['sub']).isNotEmpty ? Text(str(h['sub']), maxLines: 1, overflow: TextOverflow.ellipsis) : null,
+                onTap: () => pick(h),
+              ),
           ]),
         ),
       if (place != null)
