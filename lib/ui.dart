@@ -97,6 +97,8 @@ const _icons = <String, String>{
   'ban': '<circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/>',
   'building': '<path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16M16 9h2a2 2 0 0 1 2 2v10M2 21h20M8 7h4M8 11h4M8 15h4"/>',
   'eye': '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  'play': '<path d="M7 4.5v15a1 1 0 0 0 1.5.86l12-7.5a1 1 0 0 0 0-1.72l-12-7.5A1 1 0 0 0 7 4.5z" fill="FILL"/>',
+  'video': '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3.5v11L16 14"/>',
   'camera': '<path d="M3 8a1 1 0 0 1 1-1h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><circle cx="12" cy="13" r="4"/>',
   'bolt': '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   'mark': '<path d="M5 12.5 10 17.5 19.5 7"/>',
@@ -115,7 +117,7 @@ class Ic extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${_hex(color)}" '
-        'stroke-opacity="${color.a}" stroke-width="$stroke" stroke-linecap="round" stroke-linejoin="round">${_icons[name] ?? ''}</svg>';
+        'stroke-opacity="${color.a}" stroke-width="$stroke" stroke-linecap="round" stroke-linejoin="round">${(_icons[name] ?? '').replaceAll('FILL', _hex(color))}</svg>';
     return SvgPicture.string(svg, width: size, height: size);
   }
 }

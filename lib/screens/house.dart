@@ -10,6 +10,7 @@ import '../page.dart';
 import '../picker.dart';
 import '../toast.dart';
 import '../ui.dart';
+import '../video.dart';
 import 'camera.dart';
 
 const _form = ['address', 'floors', 'stage', 'contractor_name', 'contractor_phone'];
@@ -134,6 +135,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
     }
     final h = (d['house'] as Map).cast<String, dynamic>();
     final ps = (d['photos'] as List?)?.cast<Json>() ?? const <Json>[];
+    final vs = (d['videos'] as List?)?.cast<Json>() ?? const <Json>[];
     final editable = d['editable'] == true;
     final todo = (d['todo'] as List?)?.map((e) => '$e').toList() ?? const <String>[];
     final checklist = (d['checklist'] as List?)?.cast<Map>() ?? const <Map>[];
@@ -221,6 +223,9 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                     title: 'Thêm ảnh có sẵn${valid < min ? ' · cần thêm ${min - valid} ảnh đạt' : ''}',
                   ),
                 ],
+
+                // ---- Video công trình (không qua AI, không tính tiền) ----
+                if (editable || vs.isNotEmpty) VideoSection(hid: widget.id, videos: vs, editable: editable, onChanged: load),
 
                 // ---- Phản hồi AI + luật kiểm ảnh ----
                 Box(children: reading
