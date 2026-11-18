@@ -62,7 +62,7 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
               if (id != null) push(context, HouseScreen(id: id));
             },
           ),
-          const Padding(padding: EdgeInsets.only(top: 12, bottom: 8), child: Sec('Ảnh thế nào thì đạt')),
+          const Padding(padding: EdgeInsets.fromLTRB(2, 28, 2, 12), child: Text('Ảnh thế nào thì đạt', style: T.secT)),
           Box(gap: 14, children: [
             const _Tip(n: '1', title: 'Có giờ chụp và vị trí', text: 'Camera Vua Thầu tự in lên ảnh. Ảnh chọn sẵn phải chụp bằng Timemark trong 30 ngày.'),
             const _Tip(n: '2', title: 'Thấy rõ công trình đang xây', text: 'Không chụp lại màn hình, không dùng ảnh đã nộp.'),
@@ -93,11 +93,11 @@ class _Tip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 12, children: [
         Container(
-          width: 26,
-          height: 26,
-          decoration: BoxDecoration(color: C.soft, borderRadius: BorderRadius.circular(R.ctl), border: Border.all(color: C.line)),
+          width: 30,
+          height: 30,
+          decoration: const BoxDecoration(color: C.blueBg, shape: BoxShape.circle),
           alignment: Alignment.center,
-          child: icon != null ? Ic(icon!, size: 14, color: C.navy3) : Text('0${n!}', style: T.mono.copyWith(color: C.navy, fontWeight: FontWeight.w600)),
+          child: icon != null ? Ic(icon!, size: 14, color: C.navy3) : Text(n!, style: const TextStyle(color: C.navy3, fontWeight: FontWeight.w700, fontSize: 13)),
         ),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [

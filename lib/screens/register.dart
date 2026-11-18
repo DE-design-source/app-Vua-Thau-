@@ -75,6 +75,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Box(
+              raised: true,
               padding: const EdgeInsets.all(20),
               gap: 16,
               children: needGoogle
@@ -87,7 +88,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       if (g != null)
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: C.bg, borderRadius: BorderRadius.circular(R.ctl), border: Border.all(color: C.line)),
+                          decoration: BoxDecoration(color: C.soft, borderRadius: BorderRadius.circular(R.card), border: Border.all(color: C.field)),
                           child: Row(spacing: 12, children: [
                             Avatar(
                               color: Colors.white,
@@ -100,7 +101,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 Text(g!.email, maxLines: 1, overflow: TextOverflow.ellipsis, style: T.muted),
                               ]),
                             ),
-                            TextButton(onPressed: busy.isEmpty ? choose : null, child: const Text('Đổi', style: TextStyle(color: C.navy, fontWeight: FontWeight.w600))),
+                            TextButton(onPressed: busy.isEmpty ? choose : null, child: const Text('Đổi', style: TextStyle(color: C.text, fontWeight: FontWeight.w600, decoration: TextDecoration.underline))),
                           ]),
                         ),
                       Field(label: 'Họ tên', controller: name, capitalization: TextCapitalization.words, autofill: const [AutofillHints.name]),
@@ -114,7 +115,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             ? 'Ít nhất 6 ký tự, để đăng nhập bằng số điện thoại khi không dùng Google. Đã có tài khoản? Nhập SĐT và mật khẩu cũ để liên kết, không cần điền ngân hàng.'
                             : 'Ít nhất 6 ký tự.',
                       ),
-                      const Padding(padding: EdgeInsets.only(top: 4), child: Text('TÀI KHOẢN NHẬN TIỀN', style: T.formHead)),
+                      const Padding(padding: EdgeInsets.only(top: 8), child: Text('Tài khoản nhận tiền', style: T.secT)),
                       BankFields(c: bank),
                       Btn('Tạo tài khoản', kind: BtnKind.primary, onPressed: submit, busy: busy == 'go', disabled: busy.isNotEmpty),
                     ],
@@ -127,7 +128,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: EdgeInsets.fromLTRB(24, 0, 24, 24),
             child: Text.rich(
               TextSpan(text: 'Đã có tài khoản? ', children: [
-                TextSpan(text: 'Đăng nhập', style: TextStyle(fontWeight: FontWeight.w600, color: C.navy, decoration: TextDecoration.underline, decorationColor: C.amber, decorationThickness: 2)),
+                TextSpan(text: 'Đăng nhập', style: TextStyle(fontWeight: FontWeight.w600, color: C.text, decoration: TextDecoration.underline)),
               ]),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 15, color: C.text),

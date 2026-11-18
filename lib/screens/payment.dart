@@ -36,24 +36,25 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
         VtAppBar(title: pcId(b['id']), sub: vnTime(str(b['created_at'])), back: true),
         Expanded(
           child: ListView(padding: EdgeInsets.fromLTRB(16, 16, 16, 32 + MediaQuery.paddingOf(context).bottom), children: [
-            Box(padding: const EdgeInsets.all(16), gap: 4, children: [
-              const Row(spacing: 8, children: [
-                Pill('Đã chuyển khoản', tone: 'ok', icon: 'check'),
+            // thẻ tiền (như màn Thu nhập): đã chuyển khoản, số tiền gạch chân, khung ô thông tin chuyển khoản
+            Box(raised: true, padding: const EdgeInsets.all(20), gap: 14, children: [
+              const Row(children: [Pill('Đã chuyển khoản', tone: 'ok', icon: 'check')]),
+              Wrap(crossAxisAlignment: WrapCrossAlignment.end, spacing: 6, children: [
+                Text(money(asInt(d['total'])),
+                    style: const TextStyle(
+                        fontSize: 26, fontWeight: FontWeight.w600, color: C.text, decoration: TextDecoration.underline, letterSpacing: -0.5, height: 1.2)),
+                const Padding(padding: EdgeInsets.only(bottom: 3), child: Text('bạn đã nhận', style: TextStyle(fontSize: 16, color: C.text))),
               ]),
-              const SizedBox(height: 8),
-              const Text('BẠN ĐÃ NHẬN', style: T.formHead),
-              Text(money(asInt(d['total'])), style: T.num.copyWith(fontSize: 30, letterSpacing: -0.8)),
               Text('${rows.length} hồ sơ${adjs.isNotEmpty ? ' · ${adjs.length} khoản thưởng/trừ' : ''}', style: T.muted),
+              FieldBox(radius: 8, rows: [
+                [FieldCell('Tài khoản nhận', str(b['ctv_bank']))],
+                [
+                  FieldCell('Mã giao dịch', str(b['ref']).isNotEmpty ? str(b['ref']) : 'Không ghi'),
+                  FieldCell('Kế toán chuyển', str(b['by_name'])),
+                ],
+              ]),
             ]),
-            const SizedBox(height: 12),
-            Box(gap: 14, children: [
-              _Fact('Tài khoản nhận', str(b['ctv_bank'])),
-              _Fact('Mã giao dịch', str(b['ref']).isNotEmpty ? str(b['ref']) : 'Kế toán không ghi', mono: str(b['ref']).isNotEmpty),
-              _Fact('Kế toán chuyển', str(b['by_name'])),
-            ]),
-            const SizedBox(height: 12),
-            const Sec('Ảnh biên lai'),
-            const SizedBox(height: 12),
+            const _H3('Ảnh biên lai'),
             if (receipt != null)
               Semantics(
                 button: true,
@@ -69,10 +70,10 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
                         bottom: 10,
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(color: C.text.withValues(alpha: .78), borderRadius: BorderRadius.circular(R.ctl)),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999), boxShadow: cardShadow),
                           child: const Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
-                            Ic('eye', color: Colors.white, size: 16),
-                            Text('Bấm để xem rõ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
+                            Ic('eye', color: C.text, size: 16),
+                            Text('Bấm để xem rõ', style: TextStyle(color: C.text, fontWeight: FontWeight.w600, fontSize: 13)),
                           ]),
                         ),
                       ),
@@ -83,9 +84,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
             else
               const Text('Kế toán chưa gửi ảnh biên lai. Mã giao dịch ở trên dùng để đối chiếu với ngân hàng.', style: T.muted),
             if (adjs.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Sec('Thưởng / trừ'),
-              const SizedBox(height: 12),
+              const _H3('Thưởng / trừ'),
               Box(padding: EdgeInsets.zero, gap: 0, children: [
                 for (var k = 0; k < adjs.length; k++)
                   Container(
@@ -99,9 +98,7 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
                   ),
               ]),
             ],
-            const SizedBox(height: 12),
-            const Sec('Hồ sơ được trả lần này'),
-            const SizedBox(height: 12),
+            _H3('Hồ sơ được trả lần này', right: '${rows.length} hồ sơ'),
             Box(padding: EdgeInsets.zero, gap: 0, children: [
               for (var k = 0; k < rows.length; k++) _row(rows[k], k > 0),
             ]),
@@ -143,15 +140,19 @@ class _PaymentScreenState extends State<PaymentScreen> with PageData {
   }
 }
 
-class _Fact extends StatelessWidget {
-  const _Fact(this.label, this.value, {this.mono = false});
-  final String label, value;
-  final bool mono;
+/// Tiêu đề mục 18px đậm.
+class _H3 extends StatelessWidget {
+  const _H3(this.text, {this.right});
+  final String text;
+  final String? right;
   @override
-  Widget build(BuildContext context) => Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 3, children: [
-        Text(label.toUpperCase(), style: T.formHead),
-        Text(value.isNotEmpty ? value : '—', style: mono ? T.mono.copyWith(color: C.text, fontSize: 14) : T.body),
-      ]);
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(2, 28, 2, 12),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Expanded(child: Text(text, style: T.secT)),
+          if (right != null) Text(right!, style: T.hint),
+        ]),
+      );
 }
 
 class _Receipt extends StatelessWidget {

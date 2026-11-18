@@ -121,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextSpan(text: 'Cộng tác viên mới? ', children: [
                 TextSpan(
                     text: gOn ? 'Đăng ký bằng Google' : 'Đăng ký ngay',
-                    style: const TextStyle(fontWeight: FontWeight.w600, color: C.navy, decoration: TextDecoration.underline, decorationColor: C.amber, decorationThickness: 2)),
+                    style: const TextStyle(fontWeight: FontWeight.w600, color: C.text, decoration: TextDecoration.underline)),
               ]),
               textAlign: TextAlign.center,
               style: const TextStyle(fontSize: 14.5, color: C.muted),
