@@ -268,19 +268,35 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     );
   }
 
-  Widget _denied() => SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(mainAxisSize: MainAxisSize.min, spacing: 14, children: [
-              const Ic('camera', color: C.amber, size: 40),
-              const Text('Chưa cho phép Camera', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
-              const Text('Cho app dùng camera để chụp ảnh nghiệm thu. Bạn vẫn có thể chọn ảnh có sẵn.',
-                  textAlign: TextAlign.center, style: TextStyle(color: C.heroMuted)),
-              Btn('Mở cài đặt để cho phép', kind: BtnKind.primary, onPressed: () => Geolocator.openAppSettings()),
-              Btn('Thử lại', onPressed: _openCam),
-              Btn('Quay lại', onPressed: () => Navigator.of(context).pop()),
-            ]),
+  Widget _denied() => Container(
+        decoration: const BoxDecoration(gradient: navyGradient),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 14, children: [
+                Center(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: .1), shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: const Ic('camera', color: C.amber, size: 34),
+                  ),
+                ),
+                const Text('Chưa cho phép Camera',
+                    textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: -0.3)),
+                const Text('Cho app dùng camera để chụp ảnh nghiệm thu. Bạn vẫn có thể chọn ảnh có sẵn.',
+                    textAlign: TextAlign.center, style: TextStyle(color: C.heroMuted, height: 1.45)),
+                const SizedBox(height: 6),
+                Btn('Mở cài đặt để cho phép', kind: BtnKind.primary, onPressed: () => Geolocator.openAppSettings()),
+                Btn('Thử lại', onPressed: _openCam),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Quay lại', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, decoration: TextDecoration.underline, decorationColor: Colors.white)),
+                ),
+              ]),
+            ),
           ),
         ),
       );
@@ -299,20 +315,27 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     ? 'Đủ $min ảnh (${money(cfg.payFor(min))}). Chụp thêm 1 ảnh để được ${money(cfg.payFor(min + 1))}.'
                     : 'Đủ ảnh (${money(cfg.payFor(min + 1))}). Bấm Xong để tải lên.';
     final (gpsCol, gpsText) = p == null
-        ? (C.bad, gpsErr.isNotEmpty ? gpsErr : 'Đang tìm GPS…')
+        ? (const Color(0xFFFF7A66), gpsErr.isNotEmpty ? gpsErr : 'Đang tìm GPS…')
         : p.acc <= 30
-            ? (C.green, 'GPS ±${p.acc.round()}m')
+            ? (const Color(0xFF32D583), 'GPS ±${p.acc.round()}m')
             : p.acc <= 100
                 ? (C.amber, 'GPS ±${p.acc.round()}m')
-                : (C.bad, 'GPS yếu ±${p.acc.round()}m, ra chỗ thoáng');
+                : (const Color(0xFFFF7A66), 'GPS yếu ±${p.acc.round()}m, ra chỗ thoáng');
+    final goal = min + 1; // đủ ảnh để được mức tiền cao nhất
+    // viên tròn mờ trên nền đen
+    BoxDecoration glass([Color? border]) => BoxDecoration(
+          color: Colors.white.withValues(alpha: .14),
+          borderRadius: BorderRadius.circular(999),
+          border: border != null ? Border.all(color: border.withValues(alpha: .7)) : null,
+        );
 
     return SafeArea(
       child: Column(children: [
+        // ---- thanh trên: đóng, đèn | GPS | số ảnh ----
         Padding(
-          padding: const EdgeInsets.all(10),
-          child: Row(children: [
-            _round(onTap: leave, label: 'Đóng camera', child: const Ic('x', color: Colors.white, size: 24)),
-            const SizedBox(width: 8),
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(spacing: 8, children: [
+            _round(onTap: leave, label: 'Đóng camera', child: const Ic('x', color: Colors.white, size: 22)),
             _round(
               onTap: () async {
                 setState(() => torch = !torch);
@@ -322,30 +345,40 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               },
               label: 'Đèn',
               on: torch,
-              child: Ic('bolt', color: torch ? C.navy : Colors.white, size: 22),
+              child: Ic('bolt', color: torch ? C.amberInk : Colors.white, size: 20),
             ),
-            const Spacer(),
-            Flexible(
-              flex: 6,
-              child: GestureDetector(
-                onTap: gpsErr.isNotEmpty ? () => Geolocator.openLocationSettings() : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: .45), border: Border.all(color: gpsCol), borderRadius: BorderRadius.circular(R.ctl)),
-                  child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
-                    Ic('pin', color: gpsCol, size: 15),
-                    Flexible(
-                      child: Text(gpsText,
-                          maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500, fontSize: 12.5, fontFeatures: [FontFeature.tabularFigures()])),
-                    ),
-                  ]),
+            Expanded(
+              child: Center(
+                child: GestureDetector(
+                  onTap: gpsErr.isNotEmpty ? () => Geolocator.openLocationSettings() : null,
+                  child: Container(
+                    height: 36,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: glass(),
+                    child: Row(mainAxisSize: MainAxisSize.min, spacing: 7, children: [
+                      Container(width: 8, height: 8, decoration: BoxDecoration(color: gpsCol, shape: BoxShape.circle)),
+                      Flexible(
+                        child: Text(gpsText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12.5, fontFeatures: [FontFeature.tabularFigures()])),
+                      ),
+                    ]),
+                  ),
                 ),
               ),
             ),
-            const Spacer(),
-            SizedBox(width: 56, child: Text('$n ảnh', textAlign: TextAlign.right, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontFeatures: [FontFeature.tabularFigures()]))),
+            Container(
+              height: 36,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: glass(n >= min ? const Color(0xFF32D583) : null),
+              alignment: Alignment.center,
+              child: Text('$n/$min ảnh',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()])),
+            ),
           ]),
         ),
+        // ---- khung ngắm 3:4 ----
         Expanded(
           child: LayoutBuilder(builder: (context, box) {
             // Khung ngắm 3:4 (cảm biến 4:3, cầm dọc), vừa khít vùng trống, không cắt ảnh: thấy gì chụp nấy
@@ -353,7 +386,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             final c = cam;
             return Center(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(R.card),
                 child: SizedBox(
                   width: fw,
                   height: fh,
@@ -370,9 +403,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     if (busy)
                       Container(
                         color: Colors.black.withValues(alpha: .35),
-                        child: const Column(mainAxisAlignment: MainAxisAlignment.center, spacing: 8, children: [
+                        child: const Column(mainAxisAlignment: MainAxisAlignment.center, spacing: 10, children: [
                           CircularProgressIndicator(color: Colors.white),
-                          Text('Đang in giờ, vị trí lên ảnh…', style: TextStyle(color: Colors.white)),
+                          Text('Đang in giờ, vị trí lên ảnh…', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                         ]),
                       ),
                   ]),
@@ -381,62 +414,89 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             );
           }),
         ),
-        if (last != null)
-          Semantics(
-            liveRegion: true,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-              child: Text(
-                'Ảnh ${shots.length}: ${last.text}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w600,
-                  color: last.state == CheckState.ok ? const Color(0xFF32D583) : last.state == CheckState.bad ? const Color(0xFFFDA29B) : C.line,
+        // ---- tiến độ đủ ảnh + kết quả AI ảnh vừa chụp + gợi ý ----
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+          child: Column(spacing: 10, children: [
+            Segs(n: n, total: goal, dark: true),
+            if (last != null)
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: switch (last.state) {
+                      CheckState.ok => C.okBg,
+                      CheckState.bad => C.badBg,
+                      _ => Colors.white.withValues(alpha: .14),
+                    },
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'Ảnh ${shots.length}: ${last.text}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: switch (last.state) {
+                        CheckState.ok => C.ok,
+                        CheckState.bad => C.bad,
+                        _ => Colors.white,
+                      },
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Text(hint, textAlign: TextAlign.center, style: const TextStyle(color: C.line, fontSize: 14)),
+            Text(hint, textAlign: TextAlign.center, style: const TextStyle(color: C.heroMuted, fontSize: 13.5, height: 1.4)),
+          ]),
         ),
+        // ---- ảnh vừa chụp | nút chụp | Xong ----
         Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Semantics(
-              button: true,
-              label: 'Xem ảnh vừa chụp',
-              child: GestureDetector(
-                onTap: shots.isEmpty ? null : () => setState(() => review = true),
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .08),
-                    border: Border.all(color: Colors.white.withValues(alpha: .5), width: 1.5),
-                    borderRadius: BorderRadius.circular(R.ctl),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: shots.isEmpty
-                      ? null
-                      : Stack(fit: StackFit.expand, children: [
-                          localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200),
+          padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
+          child: Row(children: [
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Semantics(
+                  button: true,
+                  label: 'Xem ảnh vừa chụp',
+                  child: GestureDetector(
+                    onTap: shots.isEmpty ? null : () => setState(() => review = true),
+                    child: SizedBox(
+                      width: 60,
+                      height: 60,
+                      child: Stack(clipBehavior: Clip.none, children: [
+                        Container(
+                          width: 56,
+                          height: 56,
+                          margin: const EdgeInsets.only(top: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: .08),
+                            border: Border.all(color: Colors.white, width: 2),
+                            borderRadius: BorderRadius.circular(R.card),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: shots.isEmpty ? const Center(child: Ic('image', color: Colors.white54, size: 22)) : localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200),
+                        ),
+                        if (shots.isNotEmpty)
                           Positioned(
-                            right: 2,
-                            top: 2,
+                            right: -2,
+                            top: -2,
                             child: Container(
-                              constraints: const BoxConstraints(minWidth: 20),
-                              height: 20,
-                              padding: const EdgeInsets.symmetric(horizontal: 4),
-                              decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(4)),
+                              constraints: const BoxConstraints(minWidth: 22),
+                              height: 22,
+                              padding: const EdgeInsets.symmetric(horizontal: 5),
+                              decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.black, width: 1.5)),
                               alignment: Alignment.center,
-                              child: Text('${shots.length}', style: const TextStyle(color: C.navy, fontWeight: FontWeight.w700, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()])),
+                              child: Text('${shots.length}',
+                                  style: const TextStyle(color: C.amberInk, fontWeight: FontWeight.w700, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()])),
                             ),
                           ),
-                        ]),
+                      ]),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -448,29 +508,45 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 child: Opacity(
                   opacity: canShoot ? 1 : 0.4,
                   child: Container(
-                    width: 78,
-                    height: 78,
-                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 5)),
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
                     alignment: Alignment.center,
-                    child: Container(width: 60, height: 60, decoration: const BoxDecoration(color: C.amber, shape: BoxShape.circle)),
+                    child: Container(
+                      width: 64,
+                      height: 64,
+                      decoration: const BoxDecoration(color: C.amber, shape: BoxShape.circle),
+                      alignment: Alignment.center,
+                      child: const Ic('camera', color: C.amberInk, size: 26),
+                    ),
                   ),
                 ),
               ),
             ),
-            Opacity(
-              opacity: shots.isEmpty ? 0.4 : 1,
-              child: Material(
-                color: C.amber,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(R.ctl)),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(R.ctl),
-                  onTap: shots.isEmpty ? null : () => setState(() => review = true),
-                  child: Container(
-                    constraints: const BoxConstraints(minWidth: 76),
-                    height: 44,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    alignment: Alignment.center,
-                    child: Text(shots.isNotEmpty ? 'Xong (${shots.length})' : 'Xong', style: const TextStyle(color: C.navy, fontWeight: FontWeight.w600, fontSize: 15)),
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Opacity(
+                  opacity: shots.isEmpty ? 0.4 : 1,
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const StadiumBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: Ink(
+                      decoration: const ShapeDecoration(gradient: blueGradient, shape: StadiumBorder()),
+                      child: InkWell(
+                        onTap: shots.isEmpty ? null : () => setState(() => review = true),
+                        child: Container(
+                          height: 44,
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          child: Center(
+                            widthFactor: 1,
+                            child: Text(shots.isNotEmpty ? 'Xong · ${shots.length}' : 'Xong',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -487,9 +563,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         child: GestureDetector(
           onTap: onTap,
           child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(color: on ? C.amber : Colors.white.withValues(alpha: .12), borderRadius: BorderRadius.circular(R.ctl)),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(color: on ? C.amber : Colors.white.withValues(alpha: .14), shape: BoxShape.circle),
             alignment: Alignment.center,
             child: child,
           ),
@@ -498,6 +574,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   Widget _review() {
     final sum = checks.tally(shots.map((s) => s.path).toList());
+    final total = widget.have + shots.length;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Container(
@@ -505,30 +582,41 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
         child: Column(children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
-            child: Row(children: [
-              Expanded(child: Text('${shots.length} ảnh vừa chụp', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.2))),
+            padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
+                  Text('${shots.length} ảnh vừa chụp', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
+                  Text(
+                    total >= cfg.minPhotos ? 'Hồ sơ $total ảnh · dự kiến ${money(cfg.payFor(total))}' : 'Cần ít nhất ${cfg.minPhotos} ảnh, còn thiếu ${cfg.minPhotos - total}',
+                    style: T.muted.copyWith(fontSize: 14),
+                  ),
+                ]),
+              ),
               IconButton(tooltip: 'Đóng, chụp tiếp', onPressed: pct == null ? () => setState(() => review = false) : null, icon: const Ic('x', size: 26)),
             ]),
           ),
           Expanded(
-            child: ListView(padding: const EdgeInsets.all(16), children: [
+            child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 16), children: [
               PhotoGrid(children: [
                 for (var k = 0; k < shots.length; k++)
-                  Stack(fit: StackFit.expand, children: [
-                    localImage(shots[k].path, fit: BoxFit.cover, cacheWidth: 400),
-                    DelBtn(icon: 'trash', label: 'Bỏ ảnh ${k + 1}', onTap: pct == null ? () => drop(k) : null),
-                    Positioned(
-                      left: 8,
-                      top: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        decoration: BoxDecoration(color: C.text.withValues(alpha: .72), borderRadius: BorderRadius.circular(3)),
-                        child: Text((k + 1).toString().padLeft(2, '0'), style: T.mono.copyWith(color: Colors.white, fontSize: 11)),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(R.ctl),
+                    child: Stack(fit: StackFit.expand, children: [
+                      localImage(shots[k].path, fit: BoxFit.cover, cacheWidth: 400),
+                      DelBtn(icon: 'trash', label: 'Bỏ ảnh ${k + 1}', onTap: pct == null ? () => drop(k) : null),
+                      Positioned(
+                        left: 8,
+                        bottom: 6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                          child: Text('${k + 1}', style: const TextStyle(color: C.text, fontSize: 11, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                        ),
                       ),
-                    ),
-                    CheckBadge(checks[shots[k].path]),
-                  ]),
+                      CheckBadge(checks[shots[k].path]),
+                    ]),
+                  ),
               ]),
             ]),
           ),
@@ -537,7 +625,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 10, children: [
               if (pct != null) Progress(pct: pct!, doneText: 'Đã tải xong. Đang kiểm tra ảnh…'),
-              if (sum.isNotEmpty) Text('AI: $sum. Ảnh chưa đạt không được tính tiền, bấm thùng rác để bỏ rồi chụp lại.', style: const TextStyle(color: C.muted)),
+              if (sum.isNotEmpty)
+                Note(tone: 'wait', icon: 'spark', title: 'AI: $sum', text: 'Ảnh chưa đạt không được tính tiền, bấm thùng rác để bỏ rồi chụp lại.'),
               if (err.isNotEmpty) Text(err, style: const TextStyle(color: C.bad)),
               Row(spacing: 8, children: [
                 Btn('Chụp tiếp', icon: 'camera', onPressed: () => setState(() => review = false), disabled: pct != null),
