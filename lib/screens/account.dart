@@ -115,6 +115,7 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
     final hasOwed = m != null; // money chỉ có với CTV
     final owed = asInt(m?['owed']);
     final min = cfg.minPhotos;
+    final hasBank = str(b['owner']).isNotEmpty;
     final rules = <(String, String)>[
       ('image', 'Mỗi căn nhà: $min ảnh đạt = ${money(cfg.payFor(min))}, từ ${min + 1} ảnh = ${money(cfg.payFor(min + 1))}. Dưới $min ảnh không gửi được.'),
       ('clock', 'Ảnh chụp trong 30 ngày, có giờ và vị trí, thấy rõ công trình đang xây.'),
@@ -124,34 +125,54 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
     ];
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
-        Box(children: [
-          Row(spacing: 14, children: [
-            Avatar(size: 48, color: C.navy, child: Text(initials(str(user['name'])), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: C.amber, letterSpacing: 0.5))),
+        // ---- hồ sơ cá nhân: thẻ nổi, ảnh đại diện tròn ----
+        Box(raised: true, padding: const EdgeInsets.all(20), children: [
+          Row(spacing: 16, children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(gradient: navyGradient, shape: BoxShape.circle),
+              alignment: Alignment.center,
+              child: Text(initials(str(user['name'])),
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.amber, letterSpacing: 0.5)),
+            ),
             Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(str(user['name']), style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
-                Text('${str(user['username'])} · Cộng tác viên', style: T.mono),
-                if (str(user['email']).isNotEmpty) Text('Google: ${str(user['email'])}', style: T.muted),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
+                Text(str(user['name']), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.4, height: 1.2)),
+                Text(str(user['username']), style: T.muted.copyWith(fontSize: 14)),
+                const Pill('Cộng tác viên', tone: 'done'),
               ]),
             ),
           ]),
+          if (str(user['email']).isNotEmpty) ...[
+            const Divider(height: 1, color: C.line),
+            Row(spacing: 8, children: [
+              const Ic('user', color: C.muted, size: 16),
+              Expanded(child: Text('Google: ${str(user['email'])}', style: T.muted)),
+            ]),
+          ],
         ]),
-        const SizedBox(height: 12),
-        _fold('bank', 'bank', 'Tài khoản nhận tiền', [
-          if (str(b['owner']).isEmpty && str(user['bank']).isNotEmpty)
+
+        // ---- thanh toán ----
+        const _Group('Thanh toán'),
+        _fold('bank', 'bank', 'Tài khoản nhận tiền',
+            hasBank ? '${str(b['name'])} · ${str(b['no'])}' : (str(user['bank']).isNotEmpty ? 'Cần nhập lại theo 3 ô' : 'Chưa có, bấm để thêm'), [
+          if (!hasBank && str(user['bank']).isNotEmpty)
             Text('Đang lưu: “${str(user['bank'])}”. Nhập lại theo 3 ô dưới để kế toán chuyển nhanh, đúng.', style: T.muted.copyWith(color: C.alert)),
           BankFields(c: bank!),
-          Btn('Lưu tài khoản', kind: BtnKind.dark, busy: op == 'bank', onPressed: () => save('bank', '/me/bank', bank!.toJson())),
-        ]),
-        const SizedBox(height: 12),
-        _fold('pw', 'lock', 'Đổi mật khẩu', [
+          Btn('Lưu tài khoản', kind: BtnKind.primary, busy: op == 'bank', onPressed: () => save('bank', '/me/bank', bank!.toJson())),
+        ], warn: !hasBank),
+
+        // ---- bảo mật ----
+        const _Group('Đăng nhập và bảo mật'),
+        _fold('pw', 'lock', 'Đổi mật khẩu', 'Ít nhất 6 ký tự', [
           Field(label: 'Mật khẩu hiện tại', controller: pwOld, obscure: true, autofill: const [AutofillHints.password]),
           Field(label: 'Mật khẩu mới', controller: pwNew, obscure: true, autofill: const [AutofillHints.newPassword], hint: 'Ít nhất 6 ký tự.'),
           Btn('Đổi mật khẩu',
-              kind: BtnKind.dark,
+              kind: BtnKind.primary,
               busy: op == 'pw',
               disabled: pwOld.text.isEmpty || pwNew.text.length < 6,
               onPressed: () => save('pw', '/me/password', {'old': pwOld.text, 'new': pwNew.text}, (j) {
@@ -161,17 +182,8 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
                     pwNew.clear();
                   })),
         ]),
-        const SizedBox(height: 12),
-        _fold('rules', 'book', 'Quy tắc nghiệm thu', [
-          for (final (ic, t) in rules)
-            Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 10, children: [
-              Ic(ic, color: C.navy3, size: 18),
-              Expanded(child: Text(t, style: const TextStyle(color: C.text, fontSize: 14, height: 1.45))),
-            ]),
-        ]),
-        if (hasOwed) ...[
-          const SizedBox(height: 12),
-          _fold('del', 'trash', 'Xoá tài khoản', [
+        if (hasOwed)
+          _fold('del', 'trash', 'Xoá tài khoản', 'Xoá vĩnh viễn, không khôi phục được', [
             const Text(
               'Xoá họ tên, số điện thoại, email, tài khoản ngân hàng; không đăng nhập lại được. '
               'Hồ sơ đã nộp và tiền đã trả được giữ dưới tên ẩn danh để kế toán đối soát.',
@@ -182,31 +194,80 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
                   style: const TextStyle(color: C.bad, fontWeight: FontWeight.w600, height: 1.4)),
             Btn('Xoá vĩnh viễn tài khoản', icon: 'trash', kind: BtnKind.danger, onPressed: () => removeAccount(owed)),
           ]),
-        ],
-        const SizedBox(height: 12),
-        Btn('Đăng xuất', icon: 'logout', kind: BtnKind.danger, onPressed: logout),
-        const SizedBox(height: 12),
-        Text('VUA THẦU NGHIỆM THU${version.isNotEmpty ? ' · v$version' : ''}', textAlign: TextAlign.center, style: T.mono.copyWith(color: C.subtle, fontSize: 11, letterSpacing: 0.6)),
+
+        // ---- hỗ trợ ----
+        const _Group('Hỗ trợ'),
+        _fold('rules', 'book', 'Quy tắc nghiệm thu', 'Ảnh đạt, tiền hồ sơ, thanh toán', [
+          for (final (ic, t) in rules)
+            Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 12, children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(color: C.blueBg, shape: BoxShape.circle),
+                alignment: Alignment.center,
+                child: Ic(ic, color: C.navy3, size: 16),
+              ),
+              Expanded(child: Padding(padding: const EdgeInsets.only(top: 5), child: Text(t, style: const TextStyle(color: C.text, fontSize: 14, height: 1.45)))),
+            ]),
+        ]),
+
+        const SizedBox(height: 28),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: InkWell(
+            onTap: logout,
+            borderRadius: BorderRadius.circular(R.ctl),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('Đăng xuất', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: C.text, decoration: TextDecoration.underline)),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text('VUA THẦU MAP${version.isNotEmpty ? ' · PHIÊN BẢN $version' : ''}', style: T.cap.copyWith(color: C.subtle, letterSpacing: 0.6)),
       ],
     );
   }
 
-  Widget _fold(String id, String icon, String title, List<Widget> children) {
+  /// 1 dòng cài đặt kiểu Airbnb: biểu tượng, tiêu đề + mô tả, mũi tên; bấm để mở nội dung ngay bên dưới.
+  Widget _fold(String id, String icon, String title, String sub, List<Widget> children, {bool warn = false}) {
     final on = open == id;
-    return Box(children: [
-      Semantics(
-        expanded: on,
-        button: true,
-        child: InkWell(
-          onTap: () => setState(() => open = on ? '' : id),
-          child: Row(spacing: 10, children: [
-            Ic(icon, color: C.navy3, size: 18),
-            Expanded(child: Text(title, style: T.bold)),
-            AnimatedRotation(turns: on ? 0.25 : 0, duration: const Duration(milliseconds: 150), child: const Ic('right', color: C.subtle, size: 16)),
-          ]),
+    return Container(
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: C.line))),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Semantics(
+          expanded: on,
+          button: true,
+          child: InkWell(
+            onTap: () => setState(() => open = on ? '' : id),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Row(spacing: 14, children: [
+                Ic(icon, color: C.text, size: 22),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
+                    Text(title, style: const TextStyle(fontSize: 16, color: C.text)),
+                    Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: T.muted.copyWith(color: warn ? C.wait : C.muted)),
+                  ]),
+                ),
+                AnimatedRotation(turns: on ? 0.25 : 0, duration: const Duration(milliseconds: 150), child: const Ic('right', color: C.text, size: 18)),
+              ]),
+            ),
+          ),
         ),
-      ),
-      if (on) ...children,
-    ]);
+        if (on) Padding(padding: const EdgeInsets.only(bottom: 20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: children)),
+      ]),
+    );
   }
+}
+
+/// Tên nhóm cài đặt: chữ 20px đậm.
+class _Group extends StatelessWidget {
+  const _Group(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 32, bottom: 4),
+        child: Text(text, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
+      );
 }

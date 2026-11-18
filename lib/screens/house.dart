@@ -27,6 +27,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
 
   final ctl = {for (final k in _form) k: TextEditingController()};
   String stage = '';
+  int jPick = -1; // mốc đang xem nhật ký ảnh (-1: chưa chọn)
   final touched = <String>{};
   String busy2 = '';
   bool showLog = false;
@@ -447,11 +448,15 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
   Widget _milestones() {
     final gs = cfg.stages;
     final at = gs.indexOf(stage);
+    // nhật ký: bộ ảnh đã duyệt (của bạn) ở cùng công trình, theo giai đoạn
+    final journal = (d?['journal'] as List?)?.cast<Json>() ?? const <Json>[];
+    List<Json> setsOf(int k) => [for (final j in journal) if (str(j['stage']) == gs[k] && (j['photos'] as List?)?.isNotEmpty == true) j];
+    final withSets = [for (var k = 0; k < gs.length; k++) if (setsOf(k).isNotEmpty) k];
+    void pick(int k) => setState(() => jPick = jPick == k ? -1 : k);
     Widget dot(int k) {
       final done = k < at, cur = k == at;
-      return Tooltip(
-        message: gs[k],
-        child: Container(
+      final has = withSets.contains(k);
+      final circle = Container(
           width: 24,
           height: 24,
           decoration: BoxDecoration(
@@ -463,6 +468,20 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
           child: done
               ? const Ic('check', color: Colors.white, size: 12, stroke: 3)
               : Text('${k + 1}', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: cur ? C.blue : C.subtle)),
+        );
+      return Tooltip(
+        message: gs[k],
+        child: GestureDetector(
+          onTap: has ? () => pick(k) : null,
+          behavior: HitTestBehavior.opaque,
+          child: Column(mainAxisSize: MainAxisSize.min, spacing: 4, children: [
+            Container(
+              decoration: jPick == k ? BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: C.blue.withValues(alpha: .25), spreadRadius: 3)]) : null,
+              child: circle,
+            ),
+            // chấm nhỏ: mốc có bộ ảnh xem lại được
+            Container(width: 5, height: 5, decoration: BoxDecoration(shape: BoxShape.circle, color: has ? C.blue : Colors.transparent)),
+          ]),
         ),
       );
     }
@@ -476,7 +495,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
         label: at >= 0 ? 'Giai đoạn ${at + 1} trên ${gs.length}: ${gs[at]}' : 'Chưa chọn giai đoạn',
         child: Row(children: [
           for (var k = 0; k < gs.length; k++) ...[
-            if (k > 0) Expanded(child: Container(height: 2, color: k <= at ? C.navy3 : C.line)),
+            if (k > 0) Expanded(child: Padding(padding: const EdgeInsets.only(bottom: 9), child: Container(height: 2, color: k <= at ? C.navy3 : C.line))),
             dot(k),
           ],
         ]),
@@ -489,6 +508,59 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
           ]),
           if (at < gs.length - 1) Text('Tiếp theo: ${gs[at + 1]}', style: T.muted),
         ]),
+      // ---- nhật ký ảnh: các bước có bộ ảnh đã duyệt ----
+      if (withSets.isNotEmpty) ...[
+        const Divider(height: 1, color: C.line),
+        Text('XEM ẢNH NHẬT KÝ CÔNG TRÌNH', style: T.cap),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final k in withSets)
+            Semantics(
+              button: true,
+              selected: jPick == k,
+              child: Material(
+                color: jPick == k ? C.text : Colors.white,
+                shape: StadiumBorder(side: BorderSide(color: jPick == k ? C.text : C.line2)),
+                child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: () => pick(k),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                    child: Text('${k + 1}. ${gs[k]} · ${setsOf(k).length} bộ',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: jPick == k ? Colors.white : C.text)),
+                  ),
+                ),
+              ),
+            ),
+        ]),
+        if (jPick >= 0 && jPick < gs.length)
+          for (final j in setsOf(jPick)) _journalSet(j),
+      ],
+    ]);
+  }
+
+  /// 1 bộ ảnh trong nhật ký: ngày gửi (+ "hồ sơ này"), ảnh nhỏ cuộn ngang, chạm để xem lớn.
+  Widget _journalSet(Json j) {
+    final ps = [for (final id in (j['photos'] as List)) <String, dynamic>{'id': id}];
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 8, children: [
+      Row(spacing: 8, children: [
+        Expanded(child: Text('Gửi ${vnDate(str(j['at']))} · ${ps.length} ảnh', style: T.bold.copyWith(fontSize: 14))),
+        if (j['self'] == true) const Pill('Hồ sơ này', tone: 'done') else Text(hsId(j['house_id']), style: T.hint),
+      ]),
+      SizedBox(
+        height: 84,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: ps.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 6),
+          itemBuilder: (context, k) => GestureDetector(
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(fullscreenDialog: true, builder: (_) => Lightbox(ps: ps, at: k))),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(R.ctl),
+              child: SizedBox(width: 84, height: 84, child: NetPhoto.id(asInt(ps[k]['id']))),
+            ),
+          ),
+        ),
+      ),
     ]);
   }
 

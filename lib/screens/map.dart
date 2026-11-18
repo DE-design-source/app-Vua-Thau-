@@ -125,7 +125,6 @@ class _MapScreenState extends State<MapScreen> with PageData {
 
   // Lọc công trình: all = tất cả, mine = của bạn, fresh = cập nhật chưa quá hạn, stale = quá hạn cần cập nhật
   String filter = 'all';
-  bool filterOpen = false;
   bool _keep(Json o) => switch (filter) { 'fresh' => o['recent'] == true, 'stale' => o['recent'] != true, _ => true };
   List<Json> get shownMine => [for (final p in mine) if (_keep(p)) p];
   List<Json> get shownOthers => filter == 'mine' ? const [] : [for (final o in others) if (_keep(o)) o];
@@ -172,27 +171,34 @@ class _MapScreenState extends State<MapScreen> with PageData {
     final lat = p['lat'], lng = p['lng'];
     showModalBottomSheet<void>(
       context: context,
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 10, children: [
-            Row(spacing: 8, children: [
-              Text(hsId(p['id']), style: T.mono),
-              Pill(cfg.statusLabel(str(p['status'])), tone: cfg.statusTone(str(p['status']))),
-              const Spacer(),
-              Text(str(p['at']), style: T.mono),
+            Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 8, runSpacing: 6, children: [
+              Text.rich(TextSpan(style: const TextStyle(fontSize: 13, color: C.muted), children: [
+                const TextSpan(text: 'Mã số '),
+                TextSpan(text: hsId(p['id']), style: const TextStyle(fontWeight: FontWeight.w600, color: C.text, letterSpacing: 0.3)),
+              ])),
+              StatusBadge(str(p['status'])),
             ]),
-            Text(str(p['address']).isNotEmpty ? str(p['address']) : '(chưa có địa chỉ)', style: T.bold),
+            Text(str(p['address']).isNotEmpty ? str(p['address']) : '(chưa có địa chỉ)',
+                maxLines: 3, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: C.text, height: 1.25, letterSpacing: -0.3)),
+            if (str(p['at']).isNotEmpty) Text('Chụp lần cuối ${str(p['at'])}', style: T.muted),
+            const SizedBox(height: 6),
             Row(spacing: 10, children: [
+              Expanded(
+                child: Btn('Google Maps', icon: 'pin', onPressed: () => launchUrl(Uri.parse(gmapUrl(lat, lng)), mode: LaunchMode.externalApplication)),
+              ),
               Expanded(
                 child: Btn('Mở hồ sơ', kind: BtnKind.primary, onPressed: () {
                   Navigator.of(ctx).pop();
                   push(context, HouseScreen(id: asInt(p['id'])));
                 }),
-              ),
-              Expanded(
-                child: Btn('Google Maps',
-                    onPressed: () => launchUrl(Uri.parse(gmapUrl(lat, lng)), mode: LaunchMode.externalApplication)),
               ),
             ]),
           ]),
@@ -306,10 +312,16 @@ class _MapScreenState extends State<MapScreen> with PageData {
               ),
             ],
           ),
-          // Lọc công trình (kiêm chú thích màu)
-          Positioned(left: 10, right: 64, bottom: 24, child: Align(alignment: Alignment.bottomLeft, child: _filterBox(dup > 0 ? dup : 30))),
-          // Ô tìm địa điểm + kết quả + số công trình trong vòng
-          Positioned(left: 10, right: 10, top: 10, child: _searchBox()),
+          // Ô tìm địa điểm + kết quả + số công trình trong vòng; dưới là hàng lọc (kiêm chú thích màu ghim)
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 12,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 10, children: [
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: _searchBox()),
+              _chips(dup > 0 ? dup : 30),
+            ]),
+          ),
           if (busy && d == null) const Center(child: CircularProgressIndicator()),
           if (err.isNotEmpty && d == null)
             Center(
@@ -328,8 +340,9 @@ class _MapScreenState extends State<MapScreen> with PageData {
               heroTag: 'vitri',
               tooltip: 'Vị trí của tôi',
               backgroundColor: Colors.white,
-              foregroundColor: C.navy,
-              elevation: 2,
+              foregroundColor: C.text,
+              elevation: 3,
+              shape: const CircleBorder(),
               onPressed: locating ? null : locate,
               child: locating
                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
@@ -346,38 +359,65 @@ class _MapScreenState extends State<MapScreen> with PageData {
     final box = BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(R.card),
-      border: Border.all(color: C.line),
-      boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 8, offset: Offset(0, 2))],
+      border: Border.all(color: C.line2),
+      boxShadow: cardShadow,
     );
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 6, children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 8, children: [
       Container(
-        decoration: box,
+        decoration: box.copyWith(borderRadius: BorderRadius.circular(999)),
+        padding: const EdgeInsets.only(left: 18, right: 6),
+        height: 56,
         child: Row(children: [
-          const SizedBox(width: 12),
-          const Icon(Icons.search, color: C.subtle, size: 20),
           Expanded(
             child: TextField(
               controller: q,
               textInputAction: TextInputAction.search,
               onSubmitted: (_) => find(),
+              style: const TextStyle(fontSize: 14.5, color: C.text),
               decoration: const InputDecoration(
-                  hintText: 'Tìm địa chỉ, công ty, nhà thầu…', border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 12)),
+                isDense: true,
+                hintText: 'Tìm địa chỉ, công ty, nhà thầu…',
+                hintStyle: TextStyle(color: C.muted, fontSize: 14.5),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                filled: false,
+                contentPadding: EdgeInsets.symmetric(vertical: 12),
+              ),
             ),
           ),
-          if (finding)
-            const Padding(padding: EdgeInsets.all(12), child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)))
-          else if (hits != null || place != null)
+          if (hits != null || place != null)
             IconButton(
               tooltip: 'Xoá tìm kiếm',
-              icon: const Icon(Icons.close, size: 20),
+              icon: const Icon(Icons.close, size: 20, color: C.text),
               onPressed: () => setState(() {
                 q.clear();
                 hits = null;
                 place = null;
               }),
-            )
-          else
-            IconButton(tooltip: 'Tìm', icon: const Icon(Icons.arrow_forward, size: 20), onPressed: find),
+            ),
+          // nút tìm tròn vàng (như bản web)
+          Semantics(
+            button: true,
+            label: 'Tìm',
+            child: Material(
+              color: C.amber,
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: finding ? null : find,
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Center(
+                    child: finding
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: C.amberInk))
+                        : const Icon(Icons.search, color: C.amberInk, size: 22),
+                  ),
+                ),
+              ),
+            ),
+          ),
         ]),
       ),
       if (hits != null && hits!.length > 1 && place == null)
@@ -398,7 +438,7 @@ class _MapScreenState extends State<MapScreen> with PageData {
       if (place != null)
         Container(
           decoration: box,
-          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
             Text(str(place!['name']), maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
             Wrap(crossAxisAlignment: WrapCrossAlignment.center, spacing: 6, children: [
@@ -428,85 +468,64 @@ class _MapScreenState extends State<MapScreen> with PageData {
             if (hits != null && hits!.length > 1)
               GestureDetector(
                 onTap: () => setState(() => place = null),
-                child: Text('Chọn kết quả khác (${hits!.length})', style: const TextStyle(color: C.navy3, fontSize: 13, fontWeight: FontWeight.w600)),
+                child: Text('Chọn kết quả khác (${hits!.length})', style: const TextStyle(color: C.text, fontSize: 13, fontWeight: FontWeight.w600, decoration: TextDecoration.underline)),
               ),
           ]),
         ),
     ]);
   }
 
-  Widget _filterBox(int days) {
-    // màu null: không có chấm (Xem tất cả)
-    final opts = <(String, String, Color?, Color, int)>[
-      ('all', 'Xem tất cả công trình', null, Colors.white, mine.length + others.length),
-      ('mine', 'Công trình của bạn', minePin, Colors.white, mine.length),
-      ('fresh', 'Cập nhật chưa quá $days ngày', ageFresh, ageFreshLine, _n(true)),
-      ('stale', 'Quá $days ngày: cần cập nhật', ageStale, Colors.white, _n(false)),
+  /// Hàng lọc viên tròn cuộn ngang (kiêm chú thích màu ghim). Đang chọn: nền đen chữ trắng.
+  Widget _chips(int days) {
+    final opts = <(String, String, Color?, int)>[
+      ('all', 'Tất cả', null, mine.length + others.length),
+      ('mine', 'Của bạn', minePin, mine.length),
+      ('fresh', 'Chưa quá $days ngày', ageFresh, _n(true)),
+      ('stale', 'Cần cập nhật', ageStale, _n(false)),
     ];
-    final cur = opts.firstWhere((o) => o.$1 == filter);
-    final box = BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(R.card),
-      border: Border.all(color: C.line),
-      boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 8, offset: Offset(0, 2))],
-    );
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, spacing: 6, children: [
-      if (filterOpen)
-        Container(
-          decoration: box,
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            for (final o in opts)
-              InkWell(
-                onTap: () => setState(() {
-                  filter = o.$1;
-                  filterOpen = false;
-                }),
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        itemCount: opts.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, k) {
+          final o = opts[k];
+          final on = filter == o.$1;
+          return Semantics(
+            selected: on,
+            button: true,
+            child: Material(
+              color: on ? C.text : Colors.white,
+              elevation: 2,
+              shadowColor: const Color(0x33000000),
+              shape: StadiumBorder(side: BorderSide(color: on ? C.text : C.line2)),
+              child: InkWell(
+                customBorder: const StadiumBorder(),
+                onTap: () => setState(() => filter = o.$1),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-                  child: Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
-                    Icon(filter == o.$1 ? Icons.radio_button_checked : Icons.radio_button_unchecked, size: 18, color: filter == o.$1 ? C.navy : C.subtle),
-                    Flexible(child: _legend(o.$3, o.$2, line: o.$4)),
-                    Text('(${o.$5})', style: const TextStyle(fontSize: 12.5, color: C.muted)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: Row(mainAxisSize: MainAxisSize.min, spacing: 7, children: [
+                    if (o.$3 != null)
+                      Container(
+                        width: 12,
+                        height: 12,
+                        decoration: BoxDecoration(color: o.$3, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 1.5)),
+                      ),
+                    Text(o.$2, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: on ? Colors.white : C.text)),
+                    Text('${o.$4}', style: TextStyle(fontSize: 12.5, color: on ? Colors.white70 : C.muted, fontFeatures: const [FontFeature.tabularFigures()])),
                   ]),
                 ),
               ),
-          ]),
-        ),
-      Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => setState(() => filterOpen = !filterOpen),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: box.copyWith(borderRadius: BorderRadius.circular(20)),
-            child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
-              const Icon(Icons.filter_alt_outlined, size: 18, color: C.navy),
-              Flexible(
-                child: Text(filter == 'all' ? 'Lọc công trình' : cur.$2,
-                    maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.navy)),
-              ),
-              Icon(filterOpen ? Icons.expand_more : Icons.expand_less, size: 18, color: C.navy),
-            ]),
-          ),
-        ),
+            ),
+          );
+        },
       ),
-    ]);
+    );
   }
 
-  // Chấm màu 20px (to gấp đôi); c = null: chừa chỗ trống cho thẳng hàng chữ
-  Widget _legend(Color? c, String text, {Color line = Colors.white}) => Row(mainAxisSize: MainAxisSize.min, spacing: 8, children: [
-        if (c == null)
-          const SizedBox(width: 20, height: 20)
-        else
-          Container(
-            width: 20,
-            height: 20,
-            decoration: BoxDecoration(color: c, shape: BoxShape.circle, border: Border.all(color: line == Colors.white ? Colors.black12 : line, width: 1.5)),
-          ),
-        Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, color: C.text))),
-      ]);
+
 }
 
 /// Ghim định vị (giọt nước, lỗ tròn trắng giữa), mũi ghim ở đáy: đặt Marker với alignment topCenter.
