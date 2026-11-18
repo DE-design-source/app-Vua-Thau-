@@ -615,43 +615,6 @@ class Loading extends StatelessWidget {
 }
 
 /// Phần tiền trên nền navy ở đầu màn Hồ sơ và Thu nhập.
-class MoneyHero extends StatelessWidget {
-  const MoneyHero({super.key, required this.label, required this.amount, required this.stats});
-  final String label;
-  final num amount;
-  final List<(String, num)> stats;
-  @override
-  Widget build(BuildContext context) => Container(
-        decoration: const BoxDecoration(gradient: navyGradient),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 44),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
-          Text(label.toUpperCase(), style: T.formHead.copyWith(color: C.heroMuted)),
-          Text(money(amount),
-              style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w600, letterSpacing: -0.8, fontFeatures: _tab)),
-          const SizedBox(height: 8),
-          // Các số phụ: 1 hàng chia cột bằng vạch mảnh
-          Container(
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: C.heroLine))),
-            padding: const EdgeInsets.only(top: 10),
-            child: IntrinsicHeight(
-              child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                for (var i = 0; i < stats.length; i++) ...[
-                  if (i > 0) const VerticalDivider(width: 24, thickness: 1, color: C.heroLine),
-                  Expanded(
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                      Text(stats[i].$1, style: const TextStyle(color: C.heroMuted, fontSize: 12.5)),
-                      Text(money(stats[i].$2),
-                          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600, fontFeatures: _tab)),
-                    ]),
-                  ),
-                ],
-              ]),
-            ),
-          ),
-        ]),
-      );
-}
-
 /// Dời nội dung lên đè mép dưới phần navy (như marginTop: -32 của bản web).
 class Lift extends StatelessWidget {
   const Lift({super.key, required this.child, this.by = 32});
