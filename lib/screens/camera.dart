@@ -2,14 +2,18 @@
 // Chưa có GPS thì không cho chụp: ảnh nghiệm thu bắt buộc có vị trí.
 // Trợ lý khung ngắm (app Android, lib/live): đọc chữ trên khung hình ngay trên máy, khoanh SĐT + tên nhà thầu trên
 // bảng hiệu (bấm Dùng hoặc chụp trúng là lưu vào hồ sơ), nhắc tối / rung tay / nghiêng / chĩa xuống đất, nhắc chụp bảng hiệu.
+// Chế độ VIDEO: quay ngay trong màn hình (tối đa 3 phút / video, 5 video / hồ sơ; bản web mở máy quay của điện thoại),
+// video lưu tạm, tải lên cùng hồ sơ khi bấm Tải lên (hồ sơ có video được cộng thưởng).
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../api.dart';
 import '../check.dart';
@@ -19,8 +23,17 @@ import '../picker.dart';
 import '../stamp.dart';
 import '../toast.dart';
 import '../ui.dart';
+import '../video.dart' show maxVideos, mb, videoLimit, videoMime;
 import 'house.dart';
 import 'submit.dart' show houseIdOf;
+
+class _Clip {
+  _Clip(this.path, this.name, this.bytes, this.secs);
+  final String path, name;
+  final int bytes, secs;
+}
+
+const _maxClip = Duration(minutes: 3);
 
 class _Shot {
   _Shot(this.path, this.meta);
@@ -47,6 +60,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   DateTime now = DateTime.now();
   final shots = <_Shot>[];
   bool busy = false, review = false, torch = false;
+  final clips = <_Clip>[]; // video vừa quay, chưa tải lên
+  bool videoMode = false, recording = false;
+  DateTime? recAt;
+  Timer? recTimer;
+  int? doneHid; // ảnh đã lên hồ sơ này (video tải lỗi: thử lại chỉ tải video)
+  String upWhat = '';
   double? pct;
   String err = '';
   final checks = Checks(); // AI kiểm từng ảnh ngay sau khi chụp
@@ -77,6 +96,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     WidgetsBinding.instance.removeObserver(this);
     clock?.cancel();
     gps?.cancel();
+    recTimer?.cancel();
     live.removeListener(_tick);
     live.dispose();
     cam?.dispose();
@@ -91,9 +111,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     final c = cam;
     if (s == AppLifecycleState.inactive || s == AppLifecycleState.paused) {
       if (c != null) {
-        cam = null;
-        setState(() => camReady = false);
-        live.stopStream().whenComplete(c.dispose);
+        // đang quay thì lưu đoạn đã quay trước khi đóng camera
+        final stop = recording ? _stopRec() : Future<void>.value();
+        stop.whenComplete(() {
+          cam = null;
+          if (mounted) setState(() => camReady = false);
+          live.stopStream().whenComplete(c.dispose);
+        });
       }
     } else if (s == AppLifecycleState.resumed && cam == null) {
       _openCam();
@@ -177,14 +201,93 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   }
 
   Future<void> leave() async {
-    if (shots.isEmpty || await confirm(context, title: 'Bỏ ảnh vừa chụp?', text: 'Ảnh chưa tải lên sẽ mất.', ok: 'Bỏ ảnh', cancel: 'Ở lại')) {
+    if (recording) await _stopRec();
+    if (!mounted) return;
+    if ((shots.isEmpty && clips.isEmpty) ||
+        await confirm(context, title: 'Bỏ ảnh, video vừa chụp?', text: 'Ảnh, video chưa tải lên sẽ mất.', ok: 'Bỏ', cancel: 'Ở lại')) {
       for (final s in shots) {
         deleteLocal(s.path);
       }
+      for (final v in clips) {
+        deleteLocal(v.path);
+      }
       shots.clear();
+      clips.clear();
       if (mounted) Navigator.of(context).pop();
     }
   }
+
+  // ---------- quay video ----------
+  bool get canRecord => camReady && !busy && clips.length < maxVideos;
+
+  Future<void> toggleRec() => recording ? _stopRec() : _startRec();
+
+  Future<void> _startRec() async {
+    final c = cam;
+    if (c == null || !canRecord) return;
+    if (kIsWeb) {
+      // bản web (iPhone): mở máy quay của điện thoại
+      try {
+        final x = await ImagePicker().pickVideo(source: ImageSource.camera, maxDuration: _maxClip);
+        if (x != null) await _addClip(x.path, x.name, 0);
+      } catch (e) {
+        toast('Không mở được máy quay: $e');
+      }
+      return;
+    }
+    setState(() => busy = true);
+    try {
+      await live.stopStream(); // quay video không chạy kèm quét chữ (máy yếu không đủ sức)
+      await c.startVideoRecording();
+      recAt = DateTime.now();
+      recTimer = Timer(_maxClip, _stopRec);
+      HapticFeedback.mediumImpact();
+      setState(() => recording = true);
+    } catch (e) {
+      toast('Không quay được video: $e');
+      live.start(c);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _stopRec() async {
+    recTimer?.cancel();
+    recTimer = null;
+    final c = cam;
+    if (c == null || !recording) return;
+    final secs = recAt == null ? 0 : DateTime.now().difference(recAt!).inSeconds;
+    setState(() => recording = false);
+    try {
+      final x = await c.stopVideoRecording();
+      HapticFeedback.mediumImpact();
+      await _addClip(x.path, x.name, secs);
+    } catch (e) {
+      toast('Lưu video không được: $e');
+    } finally {
+      if (cam != null) live.start(cam!);
+    }
+  }
+
+  Future<void> _addClip(String path, String name, int secs) async {
+    final n = await localLength(path);
+    if (n > videoLimit) {
+      toast('Video quá 200 MB, quay ngắn lại.');
+      deleteLocal(path);
+      return;
+    }
+    final file = name.isNotEmpty && name.contains('.') ? name : 'video-${clips.length + 1}.mp4';
+    if (!mounted) return;
+    setState(() => clips.add(_Clip(path, file, n, secs)));
+    toast('Đã quay video ${clips.length} (${mb(n)}). ${videoTip()}'.trim());
+  }
+
+  void dropClip(int k) {
+    deleteLocal(clips[k].path);
+    setState(() => clips.removeAt(k));
+  }
+
+  String _clock(int s) => '${p2(s ~/ 60)}:${p2(s % 60)}';
 
   bool get canShoot => camReady && pos != null && !busy && shots.length < left;
 
@@ -235,11 +338,64 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   }
 
   Future<void> send() async {
+    if (recording) await _stopRec();
+    final target = widget.hid > 0 ? widget.hid : doneHid;
+    if (shots.isEmpty && target == null) {
+      setState(() => err = 'Chụp ít nhất 1 ảnh để tạo hồ sơ, rồi mới tải video lên.');
+      return;
+    }
     setState(() {
       err = '';
       pct = 0;
+      upWhat = '';
     });
     try {
+      int? id = target;
+      if (shots.isNotEmpty) {
+        id = await _sendPhotos();
+        if (id == null) return;
+        doneHid = id;
+      }
+      // video: từng cái một (file lớn), lỗi thì giữ lại để thử lại
+      for (var k = 0; clips.isNotEmpty; k++) {
+        final v = clips.first;
+        setState(() {
+          upWhat = 'Đang tải video ${k + 1}…';
+          pct = 0;
+        });
+        final j = await upload('/houses/$id/videos', [UpFile('files', v.path, v.name, videoMime(v.name))], onProgress: (p) {
+          if (mounted) setState(() => pct = p);
+        });
+        if (msgsOf(j).isNotEmpty) toast(msgsOf(j));
+        deleteLocal(v.path);
+        setState(() => clips.removeAt(0));
+      }
+      if (!mounted) return;
+      final hid = id;
+      if (widget.hid > 0 || hid == null) {
+        Navigator.of(context).pop(true);
+      } else {
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HouseScreen(id: hid)));
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => err = doneHid != null && shots.isEmpty
+            ? '${errMsg(e)} Ảnh đã lên hồ sơ; video vẫn còn đây, bấm Tải lên để thử lại.'
+            : '${errMsg(e)} Ảnh vẫn còn đây.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          pct = null;
+          upWhat = '';
+        });
+      }
+    }
+  }
+
+  /// Tải ảnh lên (hồ sơ mới / hồ sơ có sẵn). Trả mã hồ sơ, null khi không ảnh nào được nhận.
+  Future<int?> _sendPhotos() async {
+    {
       final j = await upload(
         widget.hid > 0 ? '/houses/${widget.hid}/photos' : '/houses',
         [for (var k = 0; k < shots.length; k++) UpFile('files', shots[k].path, 'vuathau-${k + 1}.jpg')],
@@ -255,23 +411,14 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         },
       );
       toast(msgsOf(j));
-      final id = houseIdOf(j);
+      final id = widget.hid > 0 ? widget.hid : houseIdOf(j);
       // hồ sơ mới: house_id null; hồ sơ có sẵn: added = 0
       if (widget.hid > 0 ? j.containsKey('added') && asInt(j['added']) == 0 : id == null) {
         setState(() => err = 'Không ảnh nào được nhận, xem lý do ở trên.');
-        return;
+        return null;
       }
       shots.clear();
-      if (!mounted) return;
-      if (widget.hid > 0 || id == null) {
-        Navigator.of(context).pop(true);
-      } else {
-        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HouseScreen(id: id)));
-      }
-    } catch (e) {
-      if (mounted) setState(() => err = '${errMsg(e)} Ảnh vẫn còn đây.');
-    } finally {
-      if (mounted) setState(() => pct = null);
+      return id;
     }
   }
 
@@ -280,7 +427,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: PopScope(
-        canPop: shots.isEmpty && pct == null,
+        canPop: shots.isEmpty && clips.isEmpty && pct == null && !recording,
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) return;
           if (review) {
@@ -430,6 +577,20 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                       const Center(child: CircularProgressIndicator(color: Colors.white)),
                     IgnorePointer(child: CustomPaint(painter: StampPainter(StampData(now, pos, addr)))),
                     IgnorePointer(child: CustomPaint(painter: _LivePainter(live.phoneBox, live.companyBox, live.roll))),
+                    if (recording && recAt != null)
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: .65), borderRadius: BorderRadius.circular(999)),
+                          child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
+                            Container(width: 9, height: 9, decoration: const BoxDecoration(color: Color(0xFFE5322D), shape: BoxShape.circle)),
+                            Text('${_clock(now.difference(recAt!).inSeconds.clamp(0, 9999))} / ${_clock(_maxClip.inSeconds)}',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                          ]),
+                        ),
+                      ),
                     Positioned(left: 10, right: 10, top: 10, child: _liveTop()),
                     if (busy)
                       Container(
@@ -489,7 +650,27 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   child: Text(tip, textAlign: TextAlign.center, style: const TextStyle(color: C.amberInk, fontSize: 13.5, fontWeight: FontWeight.w700)),
                 ),
               ),
-            Text(hint, textAlign: TextAlign.center, style: const TextStyle(color: C.heroMuted, fontSize: 13.5, height: 1.4)),
+            Text(
+                videoMode
+                    ? (clips.length >= maxVideos
+                        ? 'Đã đủ $maxVideos video. Bấm Xong để tải lên.'
+                        : 'Quay 1 vòng quanh công trình, tối đa 3 phút. ${videoTip()}'.trim())
+                    : hint,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: C.heroMuted, fontSize: 13.5, height: 1.4)),
+            // ---- chuyển chế độ: ẢNH | VIDEO ----
+            Row(mainAxisAlignment: MainAxisAlignment.center, spacing: 6, children: [
+              for (final (v, label) in [(false, 'ẢNH'), (true, 'VIDEO')])
+                GestureDetector(
+                  onTap: recording || busy ? null : () => setState(() => videoMode = v),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(color: videoMode == v ? Colors.white : Colors.white.withValues(alpha: .12), borderRadius: BorderRadius.circular(999)),
+                    child: Text(label,
+                        style: TextStyle(color: videoMode == v ? Colors.black : Colors.white, fontWeight: FontWeight.w700, fontSize: 12.5, letterSpacing: .6)),
+                  ),
+                ),
+            ]),
           ]),
         ),
         // ---- ảnh vừa chụp | nút chụp | Xong ----
@@ -503,7 +684,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   button: true,
                   label: 'Xem ảnh vừa chụp',
                   child: GestureDetector(
-                    onTap: shots.isEmpty ? null : () => setState(() => review = true),
+                    onTap: shots.isEmpty && clips.isEmpty ? null : () => setState(() => review = true),
                     child: SizedBox(
                       width: 60,
                       height: 60,
@@ -518,9 +699,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                             borderRadius: BorderRadius.circular(R.card),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: shots.isEmpty ? const Center(child: Ic('image', color: Colors.white54, size: 22)) : localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200),
+                          child: shots.isNotEmpty
+                              ? localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200)
+                              : Center(child: Ic(clips.isNotEmpty ? 'video' : 'image', color: Colors.white54, size: 22)),
                         ),
-                        if (shots.isNotEmpty)
+                        if (shots.isNotEmpty || clips.isNotEmpty)
                           Positioned(
                             right: -2,
                             top: -2,
@@ -530,7 +713,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                               padding: const EdgeInsets.symmetric(horizontal: 5),
                               decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.black, width: 1.5)),
                               alignment: Alignment.center,
-                              child: Text('${shots.length}',
+                              child: Text('${shots.length + clips.length}',
                                   style: const TextStyle(color: C.amberInk, fontWeight: FontWeight.w700, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()])),
                             ),
                           ),
@@ -540,34 +723,58 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 ),
               ),
             ),
-            Semantics(
-              button: true,
-              label: 'Chụp ảnh',
-              child: GestureDetector(
-                onTap: canShoot ? shoot : null,
-                child: Opacity(
-                  opacity: canShoot ? 1 : 0.4,
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
-                    alignment: Alignment.center,
+            if (videoMode)
+              Semantics(
+                button: true,
+                label: recording ? 'Dừng quay' : 'Quay video',
+                child: GestureDetector(
+                  onTap: recording || canRecord ? toggleRec : null,
+                  child: Opacity(
+                    opacity: recording || canRecord ? 1 : 0.4,
                     child: Container(
-                      width: 64,
-                      height: 64,
-                      decoration: const BoxDecoration(color: C.amber, shape: BoxShape.circle),
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
                       alignment: Alignment.center,
-                      child: const Ic('camera', color: C.amberInk, size: 26),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 180),
+                        width: recording ? 32 : 64,
+                        height: recording ? 32 : 64,
+                        decoration: BoxDecoration(color: const Color(0xFFE5322D), borderRadius: BorderRadius.circular(recording ? 8 : 32)),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Semantics(
+                button: true,
+                label: 'Chụp ảnh',
+                child: GestureDetector(
+                  onTap: canShoot ? shoot : null,
+                  child: Opacity(
+                    opacity: canShoot ? 1 : 0.4,
+                    child: Container(
+                      width: 80,
+                      height: 80,
+                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
+                      alignment: Alignment.center,
+                      child: Container(
+                        width: 64,
+                        height: 64,
+                        decoration: const BoxDecoration(color: C.amber, shape: BoxShape.circle),
+                        alignment: Alignment.center,
+                        child: const Ic('camera', color: C.amberInk, size: 26),
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
             Expanded(
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Opacity(
-                  opacity: shots.isEmpty ? 0.4 : 1,
+                  opacity: shots.isEmpty && clips.isEmpty || recording ? 0.4 : 1,
                   child: Material(
                     color: Colors.transparent,
                     shape: const StadiumBorder(),
@@ -575,13 +782,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     child: Ink(
                       decoration: const ShapeDecoration(gradient: blueGradient, shape: StadiumBorder()),
                       child: InkWell(
-                        onTap: shots.isEmpty ? null : () => setState(() => review = true),
+                        onTap: shots.isEmpty && clips.isEmpty || recording ? null : () => setState(() => review = true),
                         child: Container(
                           height: 44,
                           padding: const EdgeInsets.symmetric(horizontal: 18),
                           child: Center(
                             widthFactor: 1,
-                            child: Text(shots.isNotEmpty ? 'Xong · ${shots.length}' : 'Xong',
+                            child: Text(shots.isNotEmpty || clips.isNotEmpty ? 'Xong · ${shots.length + clips.length}' : 'Xong',
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
                           ),
                         ),
@@ -678,7 +885,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
-                  Text('${shots.length} ảnh vừa chụp', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
+                  Text(clips.isEmpty ? '${shots.length} ảnh vừa chụp' : '${shots.length} ảnh · ${clips.length} video',
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
                   Text(
                     total >= cfg.minPhotos ? 'Hồ sơ $total ảnh · dự kiến ${money(cfg.payFor(total))}' : 'Cần ít nhất ${cfg.minPhotos} ảnh, còn thiếu ${cfg.minPhotos - total}',
                     style: T.muted.copyWith(fontSize: 14),
@@ -710,13 +918,37 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     ]),
                   ),
               ]),
+              if (clips.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text('Video (${clips.length}/$maxVideos)', style: const TextStyle(fontWeight: FontWeight.w600, color: C.text)),
+                for (var k = 0; k < clips.length; k++)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(spacing: 10, children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(R.ctl)),
+                        alignment: Alignment.center,
+                        child: const Ic('video', color: Colors.white, size: 20),
+                      ),
+                      Expanded(
+                        child: Text('Video ${k + 1}${clips[k].secs > 0 ? ' · ${_clock(clips[k].secs)}' : ''} · ${mb(clips[k].bytes)}',
+                            style: const TextStyle(color: C.text, fontSize: 14)),
+                      ),
+                      IconButton(tooltip: 'Bỏ video ${k + 1}', onPressed: pct == null ? () => dropClip(k) : null, icon: const Ic('trash', size: 20)),
+                    ]),
+                  ),
+                if (videoTip().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(videoTip(), style: T.muted)),
+              ],
             ]),
           ),
           Container(
             decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: C.line))),
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 10, children: [
-              if (pct != null) Progress(pct: pct!, doneText: 'Đã tải xong. Đang kiểm tra ảnh…'),
+              if (upWhat.isNotEmpty) Text(upWhat, style: T.muted),
+              if (pct != null) Progress(pct: pct!, doneText: upWhat.isNotEmpty ? 'Đã tải xong video.' : 'Đã tải xong. Đang kiểm tra ảnh…'),
               if (ctName.isNotEmpty || ctPhone.isNotEmpty)
                 Row(spacing: 8, children: [
                   const Ic('check', color: C.ok, size: 18),
@@ -732,7 +964,15 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               Row(spacing: 8, children: [
                 Btn('Chụp tiếp', icon: 'camera', onPressed: () => setState(() => review = false), disabled: pct != null),
                 Expanded(
-                  child: Btn('Tải lên ${shots.length} ảnh', icon: 'upload', kind: BtnKind.primary, onPressed: send, busy: pct != null, disabled: shots.isEmpty),
+                  child: Btn(
+                      [if (shots.isNotEmpty) '${shots.length} ảnh', if (clips.isNotEmpty) '${clips.length} video'].isEmpty
+                          ? 'Tải lên'
+                          : 'Tải lên ${[if (shots.isNotEmpty) '${shots.length} ảnh', if (clips.isNotEmpty) '${clips.length} video'].join(' + ')}',
+                      icon: 'upload',
+                      kind: BtnKind.primary,
+                      onPressed: send,
+                      busy: pct != null,
+                      disabled: shots.isEmpty && clips.isEmpty),
                 ),
               ]),
             ]),

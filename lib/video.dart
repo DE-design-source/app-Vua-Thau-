@@ -10,14 +10,14 @@ import 'toast.dart';
 import 'ui.dart';
 
 const maxVideos = 5;
-const _limit = 200 * 1024 * 1024;
+const videoLimit = 200 * 1024 * 1024;
 
 /// Link xem video (máy chủ trả đường dẫn có chữ ký, không cần token).
 Uri videoUri(Json v) => Uri.parse(host).resolve(str(v['src']));
 
 String mb(int bytes) => bytes >= 1024 * 1024 ? '${(bytes / 1024 / 1024).toStringAsFixed(1).replaceAll('.', ',')} MB' : '${(bytes / 1024).ceil()} KB';
 
-String _mime(String name) {
+String videoMime(String name) {
   final n = name.toLowerCase();
   if (n.endsWith('.mov')) return 'video/quicktime';
   if (n.endsWith('.webm')) return 'video/webm';
@@ -52,7 +52,7 @@ class _VideoSectionState extends State<VideoSection> {
       return;
     }
     if (x == null) return;
-    if (await localLength(x.path) > _limit) {
+    if (await localLength(x.path) > videoLimit) {
       setState(() => err = 'Video quá 200 MB, quay ngắn lại rồi thử lại.');
       return;
     }
@@ -62,7 +62,7 @@ class _VideoSectionState extends State<VideoSection> {
       pct = 0;
     });
     try {
-      final j = await upload('/houses/${widget.hid}/videos', [UpFile('files', x.path, name, _mime(name))], onProgress: (p) {
+      final j = await upload('/houses/${widget.hid}/videos', [UpFile('files', x.path, name, videoMime(name))], onProgress: (p) {
         if (mounted) setState(() => pct = p);
       });
       toast(msgsOf(j));
