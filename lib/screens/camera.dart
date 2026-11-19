@@ -1,5 +1,7 @@
 // Camera nghiệm thu kiểu Timemark (như /chup của web): khung ngắm + GPS + địa chỉ, in dải chữ Timemark lên ảnh.
 // Chưa có GPS thì không cho chụp: ảnh nghiệm thu bắt buộc có vị trí.
+// Trợ lý khung ngắm (app Android, lib/live): đọc chữ trên khung hình ngay trên máy, khoanh SĐT + tên nhà thầu trên
+// bảng hiệu (bấm Dùng hoặc chụp trúng là lưu vào hồ sơ), nhắc tối / rung tay / nghiêng / chĩa xuống đất, nhắc chụp bảng hiệu.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -12,6 +14,7 @@ import 'package:geolocator/geolocator.dart';
 import '../api.dart';
 import '../check.dart';
 import '../lfile.dart';
+import '../live/live.dart';
 import '../picker.dart';
 import '../stamp.dart';
 import '../toast.dart';
@@ -47,6 +50,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   double? pct;
   String err = '';
   final checks = Checks(); // AI kiểm từng ảnh ngay sau khi chụp
+  final live = Live(); // trợ lý khung ngắm
+  String ctName = '', ctPhone = ''; // nhà thầu quét từ bảng hiệu (CTV bấm Dùng / chụp trúng bảng hiệu)
+  bool signShot = false; // đã có ảnh chụp trúng bảng hiệu
   Pos? looked;
   Timer? clock;
   StreamSubscription<Position>? gps;
@@ -58,6 +64,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     checks.addListener(_tick);
+    live.addListener(_tick);
     clock = Timer.periodic(const Duration(seconds: 1), (_) => setState(() => now = DateTime.now()));
     _openCam();
     _startGps();
@@ -70,6 +77,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     WidgetsBinding.instance.removeObserver(this);
     clock?.cancel();
     gps?.cancel();
+    live.removeListener(_tick);
+    live.dispose();
     cam?.dispose();
     checks.removeListener(_tick);
     checks.dispose();
@@ -84,7 +93,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (c != null) {
         cam = null;
         setState(() => camReady = false);
-        c.dispose();
+        live.stopStream().whenComplete(c.dispose);
       }
     } else if (s == AppLifecycleState.resumed && cam == null) {
       _openCam();
@@ -97,7 +106,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       final all = await availableCameras();
       if (all.isEmpty) throw CameraException('none', 'Máy không có camera');
       final back = all.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => all.first);
-      final c = CameraController(back, ResolutionPreset.max, enableAudio: false, imageFormatGroup: ImageFormatGroup.jpeg);
+      final c = CameraController(back, ResolutionPreset.max, enableAudio: false, imageFormatGroup: liveImageFormat());
       await c.initialize();
       // bản web: trình duyệt có thể không khoá xoay / không có đèn, bỏ qua
       try {
@@ -115,6 +124,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         camReady = true;
         denied = false;
       });
+      live.start(c);
     } on CameraException catch (e) {
       if (e.code.startsWith('CameraAccess')) {
         if (mounted) setState(() => denied = true);
@@ -182,7 +192,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     final c = cam;
     if (!canShoot || c == null) return;
     final date = DateTime.now(), p = pos!, a = addr;
+    // chụp trúng bảng hiệu: giữ SĐT / tên đang thấy cho ảnh này
+    final seenPhone = live.phone, seenName = live.company;
     setState(() => busy = true);
+    live.paused = true;
     HapticFeedback.mediumImpact();
     try {
       final raw = await c.takePicture();
@@ -193,12 +206,22 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         'lng': p.lng,
         'acc': p.acc.round(),
         'addr': a,
+        if (seenName.isNotEmpty) 'ct_name': seenName,
+        if (seenPhone.isNotEmpty) 'ct_phone': seenPhone,
       };
-      setState(() => shots.add(_Shot(path, meta)));
+      final firstSign = (seenPhone.isNotEmpty || seenName.isNotEmpty) && ctName.isEmpty && ctPhone.isEmpty;
+      setState(() {
+        shots.add(_Shot(path, meta));
+        if (seenPhone.isNotEmpty || seenName.isNotEmpty) signShot = true;
+        if (ctName.isEmpty && seenName.isNotEmpty) ctName = seenName;
+        if (ctPhone.isEmpty && seenPhone.isNotEmpty) ctPhone = seenPhone;
+      });
+      if (firstSign) toast('Đã lưu nhà thầu từ bảng hiệu: ${[if (seenName.isNotEmpty) seenName, if (seenPhone.isNotEmpty) prettyPhone(seenPhone)].join(' · ')}');
       checks.run(path, meta: meta);
     } catch (e) {
       toast('Chụp không được: $e');
     } finally {
+      live.paused = false;
       if (mounted) setState(() => busy = false);
     }
   }
@@ -220,7 +243,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       final j = await upload(
         widget.hid > 0 ? '/houses/${widget.hid}/photos' : '/houses',
         [for (var k = 0; k < shots.length; k++) UpFile('files', shots[k].path, 'vuathau-${k + 1}.jpg')],
-        fields: {'meta': jsonEncode([for (final s in shots) s.meta])},
+        // nhà thầu CTV đã chọn từ bảng hiệu: gửi kèm ảnh đầu (máy chủ điền khi hồ sơ chưa có)
+        fields: {
+          'meta': jsonEncode([
+            for (var k = 0; k < shots.length; k++)
+              {...shots[k].meta, if (k == 0 && ctName.isNotEmpty) 'ct_name': ctName, if (k == 0 && ctPhone.isNotEmpty) 'ct_phone': ctPhone}
+          ])
+        },
         onProgress: (p) {
           if (mounted) setState(() => pct = p);
         },
@@ -400,6 +429,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     else
                       const Center(child: CircularProgressIndicator(color: Colors.white)),
                     IgnorePointer(child: CustomPaint(painter: StampPainter(StampData(now, pos, addr)))),
+                    IgnorePointer(child: CustomPaint(painter: _LivePainter(live.phoneBox, live.companyBox, live.roll))),
+                    Positioned(left: 10, right: 10, top: 10, child: _liveTop()),
                     if (busy)
                       Container(
                         color: Colors.black.withValues(alpha: .35),
@@ -447,6 +478,15 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                       },
                     ),
                   ),
+                ),
+              ),
+            if (_coach() case final tip?)
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(999)),
+                  child: Text(tip, textAlign: TextAlign.center, style: const TextStyle(color: C.amberInk, fontSize: 13.5, fontWeight: FontWeight.w700)),
                 ),
               ),
             Text(hint, textAlign: TextAlign.center, style: const TextStyle(color: C.heroMuted, fontSize: 13.5, height: 1.4)),
@@ -557,6 +597,58 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     );
   }
 
+  /// 1 câu gợi ý cách chụp (ưu tiên lỗi làm hỏng ảnh trước). Không có gì cần nhắc: null.
+  String? _coach() {
+    if (!camReady || busy) return null;
+    final l = live.light;
+    if (l != null && l < 45) return torch ? 'Vẫn tối, ra chỗ sáng hơn' : 'Tối quá: bật đèn (nút tia sét) hoặc ra chỗ sáng';
+    if (live.shaky) return 'Giữ yên tay để ảnh không bị nhoè';
+    if (live.down) return 'Đưa máy lên, ngắm vào công trình';
+    final r = live.roll.abs();
+    if (r > 8 && r < 60) return 'Máy đang nghiêng ${r.round()}°, cầm thẳng theo vạch vàng';
+    if (live.phone.isNotEmpty || live.company.isNotEmpty) return 'Thấy bảng hiệu: bấm chụp để lưu cả SĐT nhà thầu';
+    if (live.scans && !signShot && shots.length >= 2) return 'Nhớ chụp 1 ảnh rõ bảng hiệu nhà thầu (tên + SĐT)';
+    return null;
+  }
+
+  /// Thẻ "Bảng hiệu" trên khung ngắm: tên + SĐT đang thấy, bấm Dùng để lưu vào hồ sơ.
+  Widget _liveTop() {
+    final ph = live.phone, name = live.company;
+    if (ph.isEmpty && name.isEmpty) return const SizedBox.shrink();
+    final same = ph == ctPhone && (name.isEmpty || name == ctName);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: .62), borderRadius: BorderRadius.circular(R.card)),
+      child: Row(spacing: 8, children: [
+        const Ic('spark', color: C.amber, size: 18),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+            const Text('BẢNG HIỆU', style: TextStyle(color: C.amber, fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: .5)),
+            if (name.isNotEmpty)
+              Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.25)),
+            if (ph.isNotEmpty)
+              Text(prettyPhone(ph),
+                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+          ]),
+        ),
+        same
+            ? const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('Đã lưu', style: TextStyle(color: Color(0xFF32D583), fontWeight: FontWeight.w700)))
+            : TextButton(
+                style: TextButton.styleFrom(backgroundColor: C.amber, foregroundColor: C.amberInk, minimumSize: const Size(0, 36)),
+                onPressed: () {
+                  setState(() {
+                    if (name.isNotEmpty) ctName = name;
+                    if (ph.isNotEmpty) ctPhone = ph;
+                  });
+                  HapticFeedback.selectionClick();
+                  toast('Đã lưu nhà thầu vào hồ sơ');
+                },
+                child: const Text('Dùng', style: TextStyle(fontWeight: FontWeight.w700)),
+              ),
+      ]),
+    );
+  }
+
   Widget _round({required VoidCallback onTap, required String label, required Widget child, bool on = false}) => Semantics(
         button: true,
         label: label,
@@ -625,6 +717,15 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 10, children: [
               if (pct != null) Progress(pct: pct!, doneText: 'Đã tải xong. Đang kiểm tra ảnh…'),
+              if (ctName.isNotEmpty || ctPhone.isNotEmpty)
+                Row(spacing: 8, children: [
+                  const Ic('check', color: C.ok, size: 18),
+                  Expanded(
+                    child: Text('Nhà thầu (quét từ bảng hiệu): ${[if (ctName.isNotEmpty) ctName, if (ctPhone.isNotEmpty) prettyPhone(ctPhone)].join(' · ')}',
+                        style: const TextStyle(color: C.text, fontSize: 13.5, fontWeight: FontWeight.w600)),
+                  ),
+                  TextButton(onPressed: pct == null ? () => setState(() => ctName = ctPhone = '') : null, child: const Text('Bỏ')),
+                ]),
               if (sum.isNotEmpty)
                 Note(tone: 'wait', icon: 'spark', title: 'AI: $sum', text: 'Ảnh chưa đạt không được tính tiền, bấm thùng rác để bỏ rồi chụp lại.'),
               if (err.isNotEmpty) Text(err, style: const TextStyle(color: C.bad)),
@@ -640,4 +741,42 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       ),
     );
   }
+}
+
+/// Khung vàng quanh chữ đọc được (toạ độ 0..1) + vạch thăng bằng khi máy nghiêng.
+class _LivePainter extends CustomPainter {
+  _LivePainter(this.phone, this.company, this.roll);
+  final TextPiece? phone, company;
+  final double roll;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final box = Paint()
+      ..color = C.amber
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    for (final p in [phone, company]) {
+      if (p == null) continue;
+      final r = Rect.fromLTRB(p.left * size.width - 4, p.top * size.height - 4, p.right * size.width + 4, p.bottom * size.height + 4);
+      canvas.drawRRect(RRect.fromRectAndRadius(r, const Radius.circular(6)), box);
+    }
+    final a = roll.abs();
+    if (a > 3 && a < 60) {
+      final c = size.center(Offset.zero), half = size.width * .32;
+      final level = Paint()
+        ..color = (a > 8 ? C.amber : Colors.white).withValues(alpha: .9)
+        ..strokeWidth = 2.5
+        ..strokeCap = StrokeCap.round;
+      // vạch ngang thật (theo trọng lực) so với vạch ngang của máy
+      final t = -roll * math.pi / 180;
+      final d = Offset(math.cos(t) * half, math.sin(t) * half);
+      canvas.drawLine(c - d, c + d, level);
+      canvas.drawLine(c - Offset(half * .25, 0), c + Offset(half * .25, 0), Paint()
+        ..color = Colors.white.withValues(alpha: .5)
+        ..strokeWidth = 1.5);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_LivePainter o) => o.phone != phone || o.company != company || (o.roll - roll).abs() > .5;
 }
