@@ -341,8 +341,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             : n < min
                 ? 'Chụp thêm ${min - n} ảnh nữa để đủ $min ảnh.'
                 : n == min
-                    ? 'Đủ $min ảnh (${money(cfg.payFor(min))}). Chụp thêm 1 ảnh để được ${money(cfg.payFor(min + 1))}.'
-                    : 'Đủ ảnh (${money(cfg.payFor(min + 1))}). Bấm Xong để tải lên.';
+                    ? 'Đủ $min ảnh (${money(cfg.payFor(min))}). Chụp thêm 1 ảnh để được ${money(cfg.payFor(min + 1))}. ${videoTip()}'.trim()
+                    : 'Đủ ảnh (${money(cfg.payFor(min + 1))}). Bấm Xong để tải lên. ${videoTip()}'.trim();
     final (gpsCol, gpsText) = p == null
         ? (const Color(0xFFFF7A66), gpsErr.isNotEmpty ? gpsErr : 'Đang tìm GPS…')
         : p.acc <= 30

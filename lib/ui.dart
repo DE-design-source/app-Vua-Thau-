@@ -129,6 +129,9 @@ String money(num? n) {
   return '${v < 0 ? '-' : ''}$sđ';
 }
 
+/// Câu nhắc thưởng video (Cấu hình máy chủ), '' khi không có thưởng.
+String videoTip() => cfg.videoBonus > 0 ? 'Có video công trình được cộng thêm ${money(cfg.videoBonus)}.' : '';
+
 final _ts = RegExp(r'^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?)?\s*(Z|[+-]\d{2}:?\d{2})?$');
 
 /// Tách ngày giờ máy chủ: RFC 3339 ("2026-11-13T14:13:05+07:00") hoặc "YYYY-MM-DD HH:MM[:SS]".

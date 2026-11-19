@@ -1,4 +1,4 @@
-// Video công trình: CTV quay / chọn video, xem lại. Chỉ để admin xem thêm (không qua AI, không tính tiền).
+// Video công trình: CTV quay / chọn video, xem lại. Admin xem thêm (không qua AI); hồ sơ có video được cộng thưởng.
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:video_player/video_player.dart';
@@ -105,7 +105,9 @@ class _VideoSectionState extends State<VideoSection> {
           Expanded(child: Btn('Quay video', icon: 'video', kind: BtnKind.dark, onPressed: busy ? null : () => add(ImageSource.camera))),
           Expanded(child: Btn('Chọn video', icon: 'upload', onPressed: busy ? null : () => add(ImageSource.gallery))),
         ]),
-        Text('Quay 1 vòng quanh công trình, tối đa 3 phút. Video để admin xem thêm, không tính vào số ảnh đạt.', style: T.hint),
+        Text(
+            'Quay 1 vòng quanh công trình, tối đa 3 phút. Video không tính vào số ảnh đạt${cfg.videoBonus > 0 ? ', nhưng hồ sơ có video được cộng thêm ${money(cfg.videoBonus)}' : ''}.',
+            style: T.hint),
       ],
       if (!widget.editable && vs.isEmpty) Text('Chưa có video.', style: T.muted),
       if (pct != null) Progress(pct: pct!, doneText: 'Đã tải xong, đang lưu video…'),

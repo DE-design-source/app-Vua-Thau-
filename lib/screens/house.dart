@@ -224,7 +224,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                   ),
                 ],
 
-                // ---- Video công trình (không qua AI, không tính tiền) ----
+                // ---- Video công trình (không qua AI; có video được cộng thưởng cfg.videoBonus) ----
                 if (editable || vs.isNotEmpty) VideoSection(hid: widget.id, videos: vs, editable: editable, onChanged: load),
 
                 // ---- Phản hồi AI + luật kiểm ảnh ----
@@ -277,6 +277,10 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                     FieldCell('$min ảnh', money(cfg.payFor(min))),
                     FieldCell('${min + 1}+ ảnh', money(cfg.payFor(min + 1))),
                   ],
+                  if (cfg.videoBonus > 0)
+                    [
+                      FieldCell('Thưởng video', vs.isNotEmpty ? '+${money(cfg.videoBonus)} (đã có video)' : '+${money(cfg.videoBonus)} nếu thêm video'),
+                    ],
                 ]),
                 if (editable) Segs(n: valid, total: min + 1),
 

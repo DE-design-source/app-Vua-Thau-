@@ -70,7 +70,7 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
             _Tip(
               icon: 'wallet',
               title: '$min ảnh đạt: ${money(cfg.payFor(min))} · từ ${min + 1} ảnh: ${money(cfg.payFor(min + 1))}',
-              text: 'Được trả gộp khi bạn có đủ ${cfg.payMin} hồ sơ đã duyệt.',
+              text: 'Được trả gộp khi bạn có đủ ${cfg.payMin} hồ sơ đã duyệt. ${videoTip()}'.trim(),
             ),
           ]),
         ]),

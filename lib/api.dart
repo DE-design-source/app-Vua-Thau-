@@ -33,6 +33,7 @@ class Cfg {
         stages = ((j['stages'] as List?) ?? const []).map((e) => '$e').toList(),
         banks = ((j['banks'] as List?) ?? const []).map((e) => '$e').toList(),
         pay = ((j['pay'] as List?) ?? const [0]).map((e) => (e as num).toInt()).toList(),
+        videoBonus = (j['video_bonus'] as num?)?.toInt() ?? 0,
         google = '${j['google_client_id'] ?? ''}';
 
   /// mã: [nhãn nội bộ, nhãn cho CTV, tông màu]
@@ -42,6 +43,10 @@ class Cfg {
 
   /// pay[n]: tiền 1 hồ sơ có n ảnh đạt
   final List<int> pay;
+
+  /// Thưởng hồ sơ có video (cộng khi hồ sơ đủ ảnh để được trả tiền); 0 = không thưởng / máy chủ cũ
+  final int videoBonus;
+
 
   /// webClientId cho Đăng nhập bằng Google; trống = máy chủ chưa bật
   final String google;
