@@ -48,7 +48,7 @@ class _SubmitScreenState extends State<SubmitScreen> implements Reloadable {
             padding: const EdgeInsets.symmetric(vertical: 14),
             child: Row(spacing: 10, children: [
               const Expanded(child: Divider()),
-              Text('HOẶC', style: T.formHead.copyWith(color: C.subtle)),
+              Text('hoặc', style: T.formHead.copyWith(color: C.subtle)),
               const Expanded(child: Divider()),
             ]),
           ),

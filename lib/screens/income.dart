@@ -56,7 +56,7 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
         ]),
         const Divider(height: 1, color: C.line),
         Row(children: [
-          Expanded(child: Text('Lần thanh toán tới'.toUpperCase(), style: T.cap)),
+          Expanded(child: Text('Lần thanh toán tới', style: T.cap)),
           Text('$approved/${cfg.payMin} hồ sơ', style: T.num.copyWith(fontSize: 13, color: full ? C.ok : C.muted)),
         ]),
         Segs(n: approved, total: cfg.payMin),
@@ -68,7 +68,7 @@ class _IncomeScreenState extends State<IncomeScreen> with PageData {
         ),
         const Divider(height: 1, color: C.line),
         Row(children: [
-          Expanded(child: Text('Chuyển khoản về'.toUpperCase(), style: T.cap)),
+          Expanded(child: Text('Chuyển khoản về', style: T.cap)),
           InkWell(
             onTap: () => openAccount(context),
             child: Padding(

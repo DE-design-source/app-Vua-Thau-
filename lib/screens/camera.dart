@@ -658,9 +658,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     : hint,
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: C.heroMuted, fontSize: 13.5, height: 1.4)),
-            // ---- chuyển chế độ: ẢNH | VIDEO ----
+            // ---- chuyển chế độ: Ảnh | Video ----
             Row(mainAxisAlignment: MainAxisAlignment.center, spacing: 6, children: [
-              for (final (v, label) in [(false, 'ẢNH'), (true, 'VIDEO')])
+              for (final (v, label) in [(false, 'Ảnh'), (true, 'Video')])
                 GestureDetector(
                   onTap: recording || busy ? null : () => setState(() => videoMode = v),
                   child: Container(
@@ -830,7 +830,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         const Ic('spark', color: C.amber, size: 18),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            const Text('BẢNG HIỆU', style: TextStyle(color: C.amber, fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: .5)),
+            const Text('Bảng hiệu', style: TextStyle(color: C.amber, fontSize: 10.5, fontWeight: FontWeight.w700)),
             if (name.isNotEmpty)
               Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.25)),
             if (ph.isNotEmpty)

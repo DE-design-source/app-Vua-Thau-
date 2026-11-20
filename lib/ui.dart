@@ -186,9 +186,9 @@ abstract final class T {
   static const body = TextStyle(fontSize: 15, color: C.text, height: 1.35);
   static const bold = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.1);
   /// Nhãn mục nhỏ in hoa (tiêu đề mục)
-  static const formHead = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: C.muted, letterSpacing: 0.6);
+  static const formHead = TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: C.muted);
   /// Nhãn ô trong khung thông tin: 10px đậm, in hoa (viết sẵn chữ hoa)
-  static const cap = TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: C.text, letterSpacing: 0.4);
+  static const cap = TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: C.text);
   /// Số, tiền, giờ: chữ số đều cột
   static const num = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: C.text, fontFeatures: _tab);
   /// Mã hồ sơ, toạ độ: phông mono
@@ -388,7 +388,7 @@ class FieldCell extends StatelessWidget {
     final body = Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-        Text(label.toUpperCase(), style: T.cap),
+        Text(label, style: T.cap),
         child ??
             Text(value.isNotEmpty ? value : '—',
                 style: big
@@ -409,7 +409,7 @@ class Sec extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.only(top: 14),
         child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Expanded(child: Text(title.toUpperCase(), style: T.formHead)),
+          Expanded(child: Text(title, style: T.formHead)),
           if (right != null) Text(right!, style: T.hint.copyWith(color: C.subtle)),
         ]),
       );
@@ -450,7 +450,7 @@ class Field extends StatelessWidget {
     OutlineInputBorder b(Color c, [double w = 1]) => OutlineInputBorder(borderRadius: BorderRadius.circular(R.ctl), borderSide: BorderSide(color: c, width: w));
     final err = error != null && error!.isNotEmpty;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 6, children: [
-      Text(label.toUpperCase(), style: T.cap),
+      Text(label, style: T.cap),
       TextField(
         controller: controller,
         obscureText: obscure,

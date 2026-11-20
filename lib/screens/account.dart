@@ -224,7 +224,7 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
           ),
         ),
         const SizedBox(height: 20),
-        Text('VUA THẦU MAP${version.isNotEmpty ? ' · PHIÊN BẢN $version' : ''}', style: T.cap.copyWith(color: C.subtle, letterSpacing: 0.6)),
+        Text('Vua Thầu Map${version.isNotEmpty ? ' · phiên bản $version' : ''}', style: T.cap.copyWith(color: C.subtle)),
       ],
     );
   }

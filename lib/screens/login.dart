@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Box(padding: const EdgeInsets.all(20), gap: 16, children: [
-              const Text('ĐĂNG NHẬP', style: T.formHead),
+              const Text('Đăng nhập', style: T.formHead),
               if (gOn) ...[
                 GoogleBtn(title: 'Đăng nhập bằng Google', onPressed: byGoogle, busy: busy == 'gg'),
                 Row(spacing: 10, children: [

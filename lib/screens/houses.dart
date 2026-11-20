@@ -107,7 +107,7 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
               [FieldCell('Chờ thanh toán', money(asInt(m['owed']))), FieldCell('Đang chờ duyệt', money(asInt(m['reviewing'])))],
             ]),
             Row(children: [
-              Expanded(child: Text('Lần thanh toán tới'.toUpperCase(), style: T.cap)),
+              Expanded(child: Text('Lần thanh toán tới', style: T.cap)),
               Text('$approved/${cfg.payMin} hồ sơ', style: T.num.copyWith(fontSize: 13, color: full ? C.ok : C.muted)),
             ]),
             Segs(n: approved, total: cfg.payMin),

@@ -312,12 +312,12 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                     infoField('floors', 'Số tầng', kb: TextInputType.number),
                     Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 8, children: [
                       Row(spacing: 6, children: [
-                        const Text('GIAI ĐOẠN THI CÔNG', style: T.cap),
+                        const Text('Giai đoạn thi công', style: T.cap),
                         if (aiTag.contains('stage')) const Pill('AI đoán', tone: 'wait', icon: 'spark'),
                       ]),
                       for (final g in cfg.stages) _stageOpt(g),
                     ]),
-                    const Padding(padding: EdgeInsets.only(top: 4), child: Text('NHÀ THẦU (TRÊN BẢNG HIỆU, BẠT CHE)', style: T.formHead)),
+                    const Padding(padding: EdgeInsets.only(top: 4), child: Text('Nhà thầu (trên bảng hiệu, bạt che)', style: T.formHead)),
                     infoField('contractor_name', 'Tên nhà thầu'),
                     infoField('contractor_phone', 'SĐT nhà thầu', kb: TextInputType.phone),
                   ])
@@ -520,7 +520,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
       // ---- nhật ký ảnh: các bước có bộ ảnh đã duyệt ----
       if (withSets.isNotEmpty) ...[
         const Divider(height: 1, color: C.line),
-        Text('XEM ẢNH NHẬT KÝ CÔNG TRÌNH', style: T.cap),
+        Text('Xem ảnh nhật ký công trình', style: T.cap),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final k in withSets)
             Semantics(
@@ -708,7 +708,7 @@ class _Fact extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-        Text(label.toUpperCase(), style: T.cap),
+        Text(label, style: T.cap),
         Text(value.isNotEmpty ? value : '—', style: T.body),
         if (link != null)
           Wrap(spacing: 16, children: [
