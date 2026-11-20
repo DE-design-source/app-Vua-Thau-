@@ -36,13 +36,17 @@ const _maxClip = Duration(minutes: 3);
 
 // Danh sách camera của máy: hỏi 1 lần, dùng lại (lần đầu CameraX khởi động ~0,3-1 giây).
 Future<List<CameraDescription>>? _cams;
-Future<List<CameraDescription>> _cameras() => _cams ??= availableCameras().then((v) {
-      if (v.isEmpty) _cams = null;
-      return v;
-    }, onError: (Object e) {
-      _cams = null;
-      throw e;
-    });
+Future<List<CameraDescription>> _cameras() =>
+    _cams ??= availableCameras().then(
+      (v) {
+        if (v.isEmpty) _cams = null;
+        return v;
+      },
+      onError: (Object e) {
+        _cams = null;
+        throw e;
+      },
+    );
 
 /// Gọi sớm (mở app) để bấm Chụp hình là camera lên ngay. Bản web bỏ qua (trình duyệt sẽ hỏi quyền camera).
 void warmCamera() {
@@ -65,8 +69,7 @@ class _Shot {
   final Map<String, Object> meta;
 }
 
-bool _far(Pos? a, Pos b) =>
-    a == null || math.sqrt(math.pow(a.lat - b.lat, 2) + math.pow((a.lng - b.lng) * math.cos(b.lat * math.pi / 180), 2)) * 111320 > 25;
+bool _far(Pos? a, Pos b) => a == null || math.sqrt(math.pow(a.lat - b.lat, 2) + math.pow((a.lng - b.lng) * math.cos(b.lat * math.pi / 180), 2)) * 111320 > 25;
 
 class CameraScreen extends StatefulWidget {
   /// hid = 0: hồ sơ mới. have: số ảnh hồ sơ đã có.
@@ -87,6 +90,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   int stamping = 0; // ảnh đã chụp, đang in giờ / vị trí (chạy nền)
   Future<void> _stamps = Future.value(); // chuỗi in chữ: lần lượt từng ảnh, giữ thứ tự
   bool flash = false; // chớp trắng lúc bấm chụp
+  double zoom = 1, minZoom = 1, maxZoom = 1, _zoomFrom = 1; // phóng to / thu nhỏ (chụm 2 ngón hoặc nút 1x, 2x...)
+  bool _zoomBusy = false;
+  double? _zoomNext;
   final clips = <_Clip>[]; // video vừa quay, chưa tải lên
   bool videoMode = false, recording = false;
   DateTime? recAt;
@@ -170,7 +176,19 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         cam = c;
         camReady = true;
         denied = false;
+        zoom = 1;
       });
+      // giới hạn zoom của máy (bản web có thể không hỗ trợ: giữ 1x, ẩn nút zoom)
+      try {
+        final lo = await c.getMinZoomLevel(), hi = await c.getMaxZoomLevel();
+        if (mounted && cam == c) {
+          setState(() {
+            minZoom = lo;
+            maxZoom = math.min(hi, 10); // quá 10x ảnh vỡ, không dùng được cho nghiệm thu
+            zoom = 1.0.clamp(minZoom, maxZoom);
+          });
+        }
+      } catch (_) {}
       // khung ngắm hiện trước, phần còn lại làm sau. Bản web: trình duyệt có thể không khoá xoay / không có đèn, bỏ qua
       try {
         await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
@@ -194,7 +212,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     try {
       final j = await api('/geocode?lat=${p.lat}&lng=${p.lng}');
       if (mounted) setState(() => addr = str(j['address']));
-    } catch (_) {/* mất mạng: ảnh vẫn có toạ độ */}
+    } catch (_) {
+      /* mất mạng: ảnh vẫn có toạ độ */
+    }
   }
 
   Future<void> _startGps() async {
@@ -332,6 +352,82 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     setState(() => clips.removeAt(k));
   }
 
+  /// Đặt mức zoom. Chụm ngón gọi liên tục: chỉ gửi xuống camera 1 lệnh một lúc, lệnh mới nhất thắng.
+  void setZoom(double z) {
+    final v = z.clamp(minZoom, maxZoom).toDouble();
+    if ((v - zoom).abs() < 0.01) return;
+    setState(() => zoom = v);
+    _zoomNext = v;
+    if (_zoomBusy) return;
+    _zoomBusy = true;
+    () async {
+      while (_zoomNext != null) {
+        final t = _zoomNext!;
+        _zoomNext = null;
+        try {
+          await cam?.setZoomLevel(t);
+        } catch (_) {}
+      }
+      _zoomBusy = false;
+    }();
+  }
+
+  Widget _zoomBar() {
+    final stops = <double>[
+      if (minZoom < 0.95) minZoom, // ống góc rộng (máy có): thấy rộng hơn
+      1,
+      for (final s in const [2.0, 5.0, 10.0])
+        if (s <= maxZoom + 0.01) s,
+    ];
+    // nút đang chọn: mức gần nhất với zoom hiện tại
+    var on = stops.first;
+    for (final s in stops) {
+      if ((s - zoom).abs() < (on - zoom).abs()) on = s;
+    }
+    String label(double s) {
+      final v = s == on ? zoom : s; // nút đang chọn hiện đúng mức đang zoom (vd 1.6x)
+      final t = v < 1 ? v.toStringAsFixed(1) : (v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1));
+      return s == on ? '${t}x' : t.replaceFirst('0.', '.');
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: .4), borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 2,
+        children: [
+          for (final s in stops)
+            Semantics(
+              button: true,
+              label: 'Zoom ${s}x',
+              child: GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setZoom(s);
+                },
+                child: Container(
+                  width: s == on ? 44 : 34,
+                  height: 34,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: s == on ? Colors.black.withValues(alpha: .55) : Colors.transparent, shape: BoxShape.circle),
+                  child: Text(
+                    label(s),
+                    style: TextStyle(
+                      color: s == on ? C.amber : Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: s == on ? 12.5 : 11.5,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   String _clock(int s) => '${p2(s ~/ 60)}:${p2(s % 60)}';
 
   bool get canShoot => camReady && pos != null && !busy && shots.length + stamping < left;
@@ -394,7 +490,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         if (ctName.isEmpty && seenName.isNotEmpty) ctName = seenName;
         if (ctPhone.isEmpty && seenPhone.isNotEmpty) ctPhone = seenPhone;
       });
-      if (firstSign) toast('Đã lưu nhà thầu từ bảng hiệu: ${[if (seenName.isNotEmpty) seenName, if (seenPhone.isNotEmpty) prettyPhone(seenPhone)].join(' · ')}');
+      if (firstSign)
+        toast('Đã lưu nhà thầu từ bảng hiệu: ${[if (seenName.isNotEmpty) seenName, if (seenPhone.isNotEmpty) prettyPhone(seenPhone)].join(' · ')}');
       checks.run(path, meta: meta);
     } catch (e) {
       toast('In giờ, vị trí lên ảnh không được: $e');
@@ -445,9 +542,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           upWhat = 'Đang tải video ${k + 1}…';
           pct = 0;
         });
-        final j = await upload('/houses/$id/videos', [UpFile('files', v.path, v.name, videoMime(v.name))], onProgress: (p) {
-          if (mounted) setState(() => pct = p);
-        });
+        final j = await upload(
+          '/houses/$id/videos',
+          [UpFile('files', v.path, v.name, videoMime(v.name))],
+          onProgress: (p) {
+            if (mounted) setState(() => pct = p);
+          },
+        );
         if (msgsOf(j).isNotEmpty) toast(msgsOf(j));
         deleteLocal(v.path);
         setState(() => clips.removeAt(0));
@@ -461,9 +562,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       }
     } catch (e) {
       if (mounted) {
-        setState(() => err = doneHid != null && shots.isEmpty
-            ? '${errMsg(e)} Ảnh đã lên hồ sơ; video vẫn còn đây, bấm Tải lên để thử lại.'
-            : '${errMsg(e)} Ảnh vẫn còn đây.');
+        setState(
+          () =>
+              err =
+                  doneHid != null && shots.isEmpty
+                      ? '${errMsg(e)} Ảnh đã lên hồ sơ; video vẫn còn đây, bấm Tải lên để thử lại.'
+                      : '${errMsg(e)} Ảnh vẫn còn đây.',
+        );
       }
     } finally {
       if (mounted) {
@@ -485,8 +590,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         fields: {
           'meta': jsonEncode([
             for (var k = 0; k < shots.length; k++)
-              {...shots[k].meta, if (k == 0 && ctName.isNotEmpty) 'ct_name': ctName, if (k == 0 && ctPhone.isNotEmpty) 'ct_phone': ctPhone}
-          ])
+              {...shots[k].meta, if (k == 0 && ctName.isNotEmpty) 'ct_name': ctName, if (k == 0 && ctPhone.isNotEmpty) 'ct_phone': ctPhone},
+          ]),
         },
         onProgress: (p) {
           if (mounted) setState(() => pct = p);
@@ -518,378 +623,475 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             leave();
           }
         },
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: denied ? _denied() : Stack(children: [_camera(), if (review) _review()]),
-        ),
+        child: Scaffold(backgroundColor: Colors.black, body: denied ? _denied() : Stack(children: [_camera(), if (review) _review()])),
       ),
     );
   }
 
   Widget _denied() => Container(
-        decoration: const BoxDecoration(gradient: navyGradient),
-        child: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 14, children: [
-                Center(
-                  child: Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(color: Colors.white.withValues(alpha: .1), shape: BoxShape.circle),
-                    alignment: Alignment.center,
-                    child: const Ic('camera', color: C.amber, size: 34),
-                  ),
+    decoration: const BoxDecoration(gradient: navyGradient),
+    child: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: 14,
+            children: [
+              Center(
+                child: Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(color: Colors.white.withValues(alpha: .1), shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: const Ic('camera', color: C.amber, size: 34),
                 ),
-                const Text('Chưa cho phép Camera',
-                    textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: -0.3)),
-                const Text('Cho app dùng camera để chụp ảnh nghiệm thu: vào Cài đặt của máy, mục Ứng dụng, Vua Thầu, Quyền, bật Camera.',
-                    textAlign: TextAlign.center, style: TextStyle(color: C.heroMuted, height: 1.45)),
-                const SizedBox(height: 6),
-                Btn('Mở cài đặt để cho phép', kind: BtnKind.primary, onPressed: () => Geolocator.openAppSettings()),
-                Btn('Thử lại', onPressed: _openCam),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Quay lại', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, decoration: TextDecoration.underline, decorationColor: Colors.white)),
+              ),
+              const Text(
+                'Chưa cho phép Camera',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: -0.3),
+              ),
+              const Text(
+                'Cho app dùng camera để chụp ảnh nghiệm thu: vào Cài đặt của máy, mục Ứng dụng, Vua Thầu, Quyền, bật Camera.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: C.heroMuted, height: 1.45),
+              ),
+              const SizedBox(height: 6),
+              Btn('Mở cài đặt để cho phép', kind: BtnKind.primary, onPressed: () => Geolocator.openAppSettings()),
+              Btn('Thử lại', onPressed: _openCam),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text(
+                  'Quay lại',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, decoration: TextDecoration.underline, decorationColor: Colors.white),
                 ),
-              ]),
-            ),
+              ),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 
   Widget _camera() {
     final n = widget.have + shots.length + stamping, min = cfg.minPhotos;
     final last = shots.isNotEmpty ? checks[shots.last.path] : null;
     final p = pos;
-    final hint = p == null
-        ? (gpsErr.isNotEmpty ? 'Ảnh nghiệm thu bắt buộc có vị trí. Bật quyền Vị trí cho app trong cài đặt máy.' : 'Đang chờ GPS để chụp. Ảnh nghiệm thu bắt buộc có vị trí.')
-        : shots.length + stamping >= left
+    final hint =
+        p == null
+            ? (gpsErr.isNotEmpty
+                ? 'Ảnh nghiệm thu bắt buộc có vị trí. Bật quyền Vị trí cho app trong cài đặt máy.'
+                : 'Đang chờ GPS để chụp. Ảnh nghiệm thu bắt buộc có vị trí.')
+            : shots.length + stamping >= left
             ? 'Đã đủ số ảnh tối đa của hồ sơ. Bấm Xong để tải lên.'
             : n < min
-                ? 'Chụp thêm ${min - n} ảnh nữa để đủ $min ảnh.'
-                : n == min
-                    ? 'Đủ $min ảnh (${money(cfg.payFor(min))}). Chụp thêm 1 ảnh để được ${money(cfg.payFor(min + 1))}. ${videoTip()}'.trim()
-                    : 'Đủ ảnh (${money(cfg.payFor(min + 1))}). Bấm Xong để tải lên. ${videoTip()}'.trim();
-    final (gpsCol, gpsText) = p == null
-        ? (const Color(0xFFFF7A66), gpsErr.isNotEmpty ? gpsErr : 'Đang tìm GPS…')
-        : p.acc <= 30
+            ? 'Chụp thêm ${min - n} ảnh nữa để đủ $min ảnh.'
+            : n == min
+            ? 'Đủ $min ảnh (${money(cfg.payFor(min))}). Chụp thêm 1 ảnh để được ${money(cfg.payFor(min + 1))}. ${videoTip()}'.trim()
+            : 'Đủ ảnh (${money(cfg.payFor(min + 1))}). Bấm Xong để tải lên. ${videoTip()}'.trim();
+    final (gpsCol, gpsText) =
+        p == null
+            ? (const Color(0xFFFF7A66), gpsErr.isNotEmpty ? gpsErr : 'Đang tìm GPS…')
+            : p.acc <= 30
             ? (const Color(0xFF32D583), 'GPS ±${p.acc.round()}m')
             : p.acc <= 100
-                ? (C.amber, 'GPS ±${p.acc.round()}m')
-                : (const Color(0xFFFF7A66), 'GPS yếu ±${p.acc.round()}m, ra chỗ thoáng');
+            ? (C.amber, 'GPS ±${p.acc.round()}m')
+            : (const Color(0xFFFF7A66), 'GPS yếu ±${p.acc.round()}m, ra chỗ thoáng');
     final goal = min + 1; // đủ ảnh để được mức tiền cao nhất
     // viên tròn mờ trên nền đen
     BoxDecoration glass([Color? border]) => BoxDecoration(
-          color: Colors.white.withValues(alpha: .14),
-          borderRadius: BorderRadius.circular(999),
-          border: border != null ? Border.all(color: border.withValues(alpha: .7)) : null,
-        );
+      color: Colors.white.withValues(alpha: .14),
+      borderRadius: BorderRadius.circular(999),
+      border: border != null ? Border.all(color: border.withValues(alpha: .7)) : null,
+    );
 
     return SafeArea(
-      child: Column(children: [
-        // ---- thanh trên: đóng, đèn | GPS | số ảnh ----
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          child: Row(spacing: 8, children: [
-            _round(onTap: leave, label: 'Đóng camera', child: const Ic('x', color: Colors.white, size: 22)),
-            _round(
-              onTap: () async {
-                setState(() => torch = !torch);
-                try {
-                  await cam?.setFlashMode(torch ? FlashMode.torch : FlashMode.off);
-                } catch (_) {}
-              },
-              label: 'Đèn',
-              on: torch,
-              child: Ic('bolt', color: torch ? C.amberInk : Colors.white, size: 20),
-            ),
-            Expanded(
-              child: Center(
-                child: GestureDetector(
-                  onTap: gpsErr.isNotEmpty ? () => Geolocator.openLocationSettings() : null,
-                  child: Container(
-                    height: 36,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: glass(),
-                    child: Row(mainAxisSize: MainAxisSize.min, spacing: 7, children: [
-                      Container(width: 8, height: 8, decoration: BoxDecoration(color: gpsCol, shape: BoxShape.circle)),
-                      Flexible(
-                        child: Text(gpsText,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 12.5, fontFeatures: [FontFeature.tabularFigures()])),
-                      ),
-                    ]),
-                  ),
+      child: Column(
+        children: [
+          // ---- thanh trên: đóng, đèn | GPS | số ảnh ----
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+            child: Row(
+              spacing: 8,
+              children: [
+                _round(onTap: leave, label: 'Đóng camera', child: const Ic('x', color: Colors.white, size: 22)),
+                _round(
+                  onTap: () async {
+                    setState(() => torch = !torch);
+                    try {
+                      await cam?.setFlashMode(torch ? FlashMode.torch : FlashMode.off);
+                    } catch (_) {}
+                  },
+                  label: 'Đèn',
+                  on: torch,
+                  child: Ic('bolt', color: torch ? C.amberInk : Colors.white, size: 20),
                 ),
-              ),
-            ),
-            Container(
-              height: 36,
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              decoration: glass(n >= min ? const Color(0xFF32D583) : null),
-              alignment: Alignment.center,
-              child: Text('$n/$min ảnh',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()])),
-            ),
-          ]),
-        ),
-        // ---- khung ngắm 3:4 ----
-        Expanded(
-          child: LayoutBuilder(builder: (context, box) {
-            // Khung ngắm 3:4 (cảm biến 4:3, cầm dọc), vừa khít vùng trống, không cắt ảnh: thấy gì chụp nấy
-            final fw = math.min(box.maxWidth, box.maxHeight * 3 / 4), fh = fw * 4 / 3;
-            final c = cam;
-            return Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(R.card),
-                child: SizedBox(
-                  width: fw,
-                  height: fh,
-                  child: Stack(fit: StackFit.expand, children: [
-                    if (c != null && camReady)
-                      FittedBox(
-                        fit: BoxFit.cover,
-                        clipBehavior: Clip.hardEdge,
-                        child: SizedBox(width: fw, height: fw * c.value.aspectRatio, child: CameraPreview(c)),
-                      )
-                    else
-                      const Center(child: CircularProgressIndicator(color: Colors.white)),
-                    IgnorePointer(child: CustomPaint(painter: StampPainter(StampData(now, pos, addr)))),
-                    IgnorePointer(child: CustomPaint(painter: _LivePainter(live.phoneBox, live.companyBox, live.roll))),
-                    if (recording && recAt != null)
-                      Positioned(
-                        right: 10,
-                        bottom: 10,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(color: Colors.black.withValues(alpha: .65), borderRadius: BorderRadius.circular(999)),
-                          child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
-                            Container(width: 9, height: 9, decoration: const BoxDecoration(color: Color(0xFFE5322D), shape: BoxShape.circle)),
-                            Text('${_clock(now.difference(recAt!).inSeconds.clamp(0, 9999))} / ${_clock(_maxClip.inSeconds)}',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
-                          ]),
-                        ),
-                      ),
-                    Positioned(left: 10, right: 10, top: 10, child: _liveTop()),
-                    IgnorePointer(
-                      child: AnimatedOpacity(
-                        opacity: flash ? 0.55 : 0,
-                        duration: Duration(milliseconds: flash ? 0 : 160),
-                        child: const ColoredBox(color: Colors.white, child: SizedBox.expand()),
-                      ),
-                    ),
-                  ]),
-                ),
-              ),
-            );
-          }),
-        ),
-        // ---- tiến độ đủ ảnh + kết quả AI ảnh vừa chụp + gợi ý ----
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-          child: Column(spacing: 10, children: [
-            Segs(n: n, total: goal, dark: true),
-            if (last != null)
-              Semantics(
-                liveRegion: true,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: switch (last.state) {
-                      CheckState.ok => C.okBg,
-                      CheckState.bad => C.badBg,
-                      _ => Colors.white.withValues(alpha: .14),
-                    },
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    'Ảnh ${shots.length}: ${last.text}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: switch (last.state) {
-                        CheckState.ok => C.ok,
-                        CheckState.bad => C.bad,
-                        _ => Colors.white,
-                      },
-                    ),
-                  ),
-                ),
-              ),
-            if (_coach() case final tip?)
-              Semantics(
-                liveRegion: true,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(999)),
-                  child: Text(tip, textAlign: TextAlign.center, style: const TextStyle(color: C.amberInk, fontSize: 13.5, fontWeight: FontWeight.w700)),
-                ),
-              ),
-            Text(
-                videoMode
-                    ? (clips.length >= maxVideos
-                        ? 'Đã đủ $maxVideos video. Bấm Xong để tải lên.'
-                        : 'Quay 1 vòng quanh công trình, tối đa 3 phút. ${videoTip()}'.trim())
-                    : hint,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: C.heroMuted, fontSize: 13.5, height: 1.4)),
-            // ---- chuyển chế độ: Ảnh | Video ----
-            Row(mainAxisAlignment: MainAxisAlignment.center, spacing: 6, children: [
-              for (final (v, label) in [(false, 'Ảnh'), (true, 'Video')])
-                GestureDetector(
-                  onTap: recording || busy ? null : () => setState(() => videoMode = v),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(color: videoMode == v ? Colors.white : Colors.white.withValues(alpha: .12), borderRadius: BorderRadius.circular(999)),
-                    child: Text(label,
-                        style: TextStyle(color: videoMode == v ? Colors.black : Colors.white, fontWeight: FontWeight.w700, fontSize: 12.5, letterSpacing: .6)),
-                  ),
-                ),
-            ]),
-          ]),
-        ),
-        // ---- ảnh vừa chụp | nút chụp | Xong ----
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
-          child: Row(children: [
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Semantics(
-                  button: true,
-                  label: 'Xem ảnh vừa chụp',
-                  child: GestureDetector(
-                    onTap: hasMedia ? _openReview : null,
-                    child: SizedBox(
-                      width: 60,
-                      height: 60,
-                      child: Stack(clipBehavior: Clip.none, children: [
-                        Container(
-                          width: 56,
-                          height: 56,
-                          margin: const EdgeInsets.only(top: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: .08),
-                            border: Border.all(color: Colors.white, width: 2),
-                            borderRadius: BorderRadius.circular(R.card),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Stack(fit: StackFit.expand, children: [
-                            shots.isNotEmpty
-                                ? localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200)
-                                : Center(child: Ic(clips.isNotEmpty ? 'video' : 'image', color: Colors.white54, size: 22)),
-                            // ảnh vừa chụp đang in giờ / vị trí (chạy nền, vẫn chụp tiếp được)
-                            if (stamping > 0)
-                              const ColoredBox(
-                                color: Color(0x66000000),
-                                child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
+                Expanded(
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: gpsErr.isNotEmpty ? () => Geolocator.openLocationSettings() : null,
+                      child: Container(
+                        height: 36,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: glass(),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: 7,
+                          children: [
+                            Container(width: 8, height: 8, decoration: BoxDecoration(color: gpsCol, shape: BoxShape.circle)),
+                            Flexible(
+                              child: Text(
+                                gpsText,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 12.5,
+                                  fontFeatures: [FontFeature.tabularFigures()],
+                                ),
                               ),
-                          ]),
+                            ),
+                          ],
                         ),
-                        if (hasMedia)
-                          Positioned(
-                            right: -2,
-                            top: -2,
-                            child: Container(
-                              constraints: const BoxConstraints(minWidth: 22),
-                              height: 22,
-                              padding: const EdgeInsets.symmetric(horizontal: 5),
-                              decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.black, width: 1.5)),
-                              alignment: Alignment.center,
-                              child: Text('${shots.length + stamping + clips.length}',
-                                  style: const TextStyle(color: C.amberInk, fontWeight: FontWeight.w700, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()])),
+                      ),
+                    ),
+                  ),
+                ),
+                Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: glass(n >= min ? const Color(0xFF32D583) : null),
+                  alignment: Alignment.center,
+                  child: Text(
+                    '$n/$min ảnh',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // ---- khung ngắm đúng tỷ lệ ảnh chụp (9:16 khi cầm dọc) ----
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, box) {
+                // Khung ngắm cùng tỷ lệ với ảnh (camera 1080p = 16:9, cầm dọc thành 9:16), vừa khít vùng trống, không cắt ảnh:
+                // thấy gì chụp nấy, dải chữ trên khung ngắm nằm đúng chỗ như trên ảnh.
+                final c = cam;
+                final ar = c != null && camReady && c.value.aspectRatio > 0 ? c.value.aspectRatio : 16 / 9; // dài / ngắn
+                final fw = math.min(box.maxWidth, box.maxHeight / ar), fh = fw * ar;
+                return Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(R.card),
+                    child: SizedBox(
+                      width: fw,
+                      height: fh,
+                      // chụm 2 ngón để phóng to / thu nhỏ (cả lúc quay video)
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onScaleStart: (_) => _zoomFrom = zoom,
+                        onScaleUpdate: (d) {
+                          if (d.pointerCount >= 2) setZoom(_zoomFrom * d.scale);
+                        },
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (c != null && camReady)
+                              FittedBox(
+                                fit: BoxFit.cover,
+                                clipBehavior: Clip.hardEdge,
+                                child: SizedBox(width: fw, height: fw * c.value.aspectRatio, child: CameraPreview(c)),
+                              )
+                            else
+                              const Center(child: CircularProgressIndicator(color: Colors.white)),
+                            IgnorePointer(child: CustomPaint(painter: StampPainter(StampData(now, pos, addr)))),
+                            IgnorePointer(child: CustomPaint(painter: _LivePainter(live.phoneBox, live.companyBox, live.roll))),
+                            if (recording && recAt != null)
+                              Positioned(
+                                right: 10,
+                                bottom: 10,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(color: Colors.black.withValues(alpha: .65), borderRadius: BorderRadius.circular(999)),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    spacing: 6,
+                                    children: [
+                                      Container(width: 9, height: 9, decoration: const BoxDecoration(color: Color(0xFFE5322D), shape: BoxShape.circle)),
+                                      Text(
+                                        '${_clock(now.difference(recAt!).inSeconds.clamp(0, 9999))} / ${_clock(_maxClip.inSeconds)}',
+                                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            Positioned(left: 10, right: 10, top: 10, child: _liveTop()),
+                            // nút zoom nhanh (0.5x nếu máy có ống góc rộng, 1x, 2x, 5x...), nằm trên dải chữ
+                            if (camReady && maxZoom > minZoom) Positioned(left: 0, right: 0, bottom: fh * 0.2, child: Center(child: _zoomBar())),
+                            IgnorePointer(
+                              child: AnimatedOpacity(
+                                opacity: flash ? 0.55 : 0,
+                                duration: Duration(milliseconds: flash ? 0 : 160),
+                                child: const ColoredBox(color: Colors.white, child: SizedBox.expand()),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          // ---- tiến độ đủ ảnh + kết quả AI ảnh vừa chụp + gợi ý ----
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+            child: Column(
+              spacing: 10,
+              children: [
+                Segs(n: n, total: goal, dark: true),
+                if (last != null)
+                  Semantics(
+                    liveRegion: true,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: switch (last.state) {
+                          CheckState.ok => C.okBg,
+                          CheckState.bad => C.badBg,
+                          _ => Colors.white.withValues(alpha: .14),
+                        },
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        'Ảnh ${shots.length}: ${last.text}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: switch (last.state) {
+                            CheckState.ok => C.ok,
+                            CheckState.bad => C.bad,
+                            _ => Colors.white,
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                if (_coach() case final tip?)
+                  Semantics(
+                    liveRegion: true,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(999)),
+                      child: Text(tip, textAlign: TextAlign.center, style: const TextStyle(color: C.amberInk, fontSize: 13.5, fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                Text(
+                  videoMode
+                      ? (clips.length >= maxVideos
+                          ? 'Đã đủ $maxVideos video. Bấm Xong để tải lên.'
+                          : 'Quay 1 vòng quanh công trình, tối đa 3 phút. ${videoTip()}'.trim())
+                      : hint,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: C.heroMuted, fontSize: 13.5, height: 1.4),
+                ),
+                // ---- chuyển chế độ: Ảnh | Video ----
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  spacing: 6,
+                  children: [
+                    for (final (v, label) in [(false, 'Ảnh'), (true, 'Video')])
+                      GestureDetector(
+                        onTap: recording || busy ? null : () => setState(() => videoMode = v),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: videoMode == v ? Colors.white : Colors.white.withValues(alpha: .12),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: videoMode == v ? Colors.black : Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 12.5,
+                              letterSpacing: .6,
                             ),
                           ),
-                      ]),
-                    ),
-                  ),
+                        ),
+                      ),
+                  ],
                 ),
-              ),
+              ],
             ),
-            if (videoMode)
-              Semantics(
-                button: true,
-                label: recording ? 'Dừng quay' : 'Quay video',
-                child: GestureDetector(
-                  onTap: recording || canRecord ? toggleRec : null,
-                  child: Opacity(
-                    opacity: recording || canRecord ? 1 : 0.4,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
-                      alignment: Alignment.center,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 180),
-                        width: recording ? 32 : 64,
-                        height: recording ? 32 : 64,
-                        decoration: BoxDecoration(color: const Color(0xFFE5322D), borderRadius: BorderRadius.circular(recording ? 8 : 32)),
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            else
-              Semantics(
-                button: true,
-                label: 'Chụp ảnh',
-                child: GestureDetector(
-                  onTap: canShoot ? shoot : null,
-                  child: Opacity(
-                    opacity: canShoot ? 1 : 0.4,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
-                      alignment: Alignment.center,
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: const BoxDecoration(color: C.amber, shape: BoxShape.circle),
-                        alignment: Alignment.center,
-                        child: const Ic('camera', color: C.amberInk, size: 26),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Opacity(
-                  opacity: !hasMedia || recording ? 0.4 : 1,
-                  child: Material(
-                    color: Colors.transparent,
-                    shape: const StadiumBorder(),
-                    clipBehavior: Clip.antiAlias,
-                    child: Ink(
-                      decoration: const ShapeDecoration(gradient: blueGradient, shape: StadiumBorder()),
-                      child: InkWell(
-                        onTap: !hasMedia || recording ? null : _openReview,
-                        child: Container(
-                          height: 44,
-                          padding: const EdgeInsets.symmetric(horizontal: 18),
-                          child: Center(
-                            widthFactor: 1,
-                            child: Text(hasMedia ? 'Xong · ${shots.length + stamping + clips.length}' : 'Xong',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
+          ),
+          // ---- ảnh vừa chụp | nút chụp | Xong ----
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Semantics(
+                      button: true,
+                      label: 'Xem ảnh vừa chụp',
+                      child: GestureDetector(
+                        onTap: hasMedia ? _openReview : null,
+                        child: SizedBox(
+                          width: 60,
+                          height: 60,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Container(
+                                width: 56,
+                                height: 56,
+                                margin: const EdgeInsets.only(top: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: .08),
+                                  border: Border.all(color: Colors.white, width: 2),
+                                  borderRadius: BorderRadius.circular(R.card),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    shots.isNotEmpty
+                                        ? localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200)
+                                        : Center(child: Ic(clips.isNotEmpty ? 'video' : 'image', color: Colors.white54, size: 22)),
+                                    // ảnh vừa chụp đang in giờ / vị trí (chạy nền, vẫn chụp tiếp được)
+                                    if (stamping > 0)
+                                      const ColoredBox(
+                                        color: Color(0x66000000),
+                                        child: Center(
+                                          child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (hasMedia)
+                                Positioned(
+                                  right: -2,
+                                  top: -2,
+                                  child: Container(
+                                    constraints: const BoxConstraints(minWidth: 22),
+                                    height: 22,
+                                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                                    decoration: BoxDecoration(
+                                      color: C.amber,
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(color: Colors.black, width: 1.5),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '${shots.length + stamping + clips.length}',
+                                      style: const TextStyle(
+                                        color: C.amberInk,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 12,
+                                        fontFeatures: [FontFeature.tabularFigures()],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
+                if (videoMode)
+                  Semantics(
+                    button: true,
+                    label: recording ? 'Dừng quay' : 'Quay video',
+                    child: GestureDetector(
+                      onTap: recording || canRecord ? toggleRec : null,
+                      child: Opacity(
+                        opacity: recording || canRecord ? 1 : 0.4,
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
+                          alignment: Alignment.center,
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            width: recording ? 32 : 64,
+                            height: recording ? 32 : 64,
+                            decoration: BoxDecoration(color: const Color(0xFFE5322D), borderRadius: BorderRadius.circular(recording ? 8 : 32)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Semantics(
+                    button: true,
+                    label: 'Chụp ảnh',
+                    child: GestureDetector(
+                      onTap: canShoot ? shoot : null,
+                      child: Opacity(
+                        opacity: canShoot ? 1 : 0.4,
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
+                          alignment: Alignment.center,
+                          child: Container(
+                            width: 64,
+                            height: 64,
+                            decoration: const BoxDecoration(color: C.amber, shape: BoxShape.circle),
+                            alignment: Alignment.center,
+                            child: const Ic('camera', color: C.amberInk, size: 26),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Opacity(
+                      opacity: !hasMedia || recording ? 0.4 : 1,
+                      child: Material(
+                        color: Colors.transparent,
+                        shape: const StadiumBorder(),
+                        clipBehavior: Clip.antiAlias,
+                        child: Ink(
+                          decoration: const ShapeDecoration(gradient: blueGradient, shape: StadiumBorder()),
+                          child: InkWell(
+                            onTap: !hasMedia || recording ? null : _openReview,
+                            child: Container(
+                              height: 44,
+                              padding: const EdgeInsets.symmetric(horizontal: 18),
+                              child: Center(
+                                widthFactor: 1,
+                                child: Text(
+                                  hasMedia ? 'Xong · ${shots.length + stamping + clips.length}' : 'Xong',
+                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ]),
-        ),
-      ]),
+          ),
+        ],
+      ),
     );
   }
 
@@ -915,21 +1117,37 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 6, 8),
       decoration: BoxDecoration(color: Colors.black.withValues(alpha: .62), borderRadius: BorderRadius.circular(R.card)),
-      child: Row(spacing: 8, children: [
-        const Ic('spark', color: C.amber, size: 18),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            const Text('Bảng hiệu', style: TextStyle(color: C.amber, fontSize: 10.5, fontWeight: FontWeight.w700)),
-            if (name.isNotEmpty)
-              Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.25)),
-            if (ph.isNotEmpty)
-              Text(prettyPhone(ph),
-                  style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
-          ]),
-        ),
-        same
-            ? const Padding(padding: EdgeInsets.symmetric(horizontal: 8), child: Text('Đã lưu', style: TextStyle(color: Color(0xFF32D583), fontWeight: FontWeight.w700)))
-            : TextButton(
+      child: Row(
+        spacing: 8,
+        children: [
+          const Ic('spark', color: C.amber, size: 18),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Bảng hiệu', style: TextStyle(color: C.amber, fontSize: 10.5, fontWeight: FontWeight.w700)),
+                if (name.isNotEmpty)
+                  Text(
+                    name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600, height: 1.25),
+                  ),
+                if (ph.isNotEmpty)
+                  Text(
+                    prettyPhone(ph),
+                    style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
+                  ),
+              ],
+            ),
+          ),
+          same
+              ? const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: Text('Đã lưu', style: TextStyle(color: Color(0xFF32D583), fontWeight: FontWeight.w700)),
+              )
+              : TextButton(
                 style: TextButton.styleFrom(backgroundColor: C.amber, foregroundColor: C.amberInk, minimumSize: const Size(0, 36)),
                 onPressed: () {
                   setState(() {
@@ -941,24 +1159,25 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 },
                 child: const Text('Dùng', style: TextStyle(fontWeight: FontWeight.w700)),
               ),
-      ]),
+        ],
+      ),
     );
   }
 
   Widget _round({required VoidCallback onTap, required String label, required Widget child, bool on = false}) => Semantics(
-        button: true,
-        label: label,
-        child: GestureDetector(
-          onTap: onTap,
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(color: on ? C.amber : Colors.white.withValues(alpha: .14), shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: child,
-          ),
-        ),
-      );
+    button: true,
+    label: label,
+    child: GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(color: on ? C.amber : Colors.white.withValues(alpha: .14), shape: BoxShape.circle),
+        alignment: Alignment.center,
+        child: child,
+      ),
+    ),
+  );
 
   Widget _review() {
     final sum = checks.tally(shots.map((s) => s.path).toList());
@@ -968,105 +1187,152 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       child: Container(
         color: C.bg,
         padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
-                  Text(clips.isEmpty ? '${shots.length} ảnh vừa chụp' : '${shots.length} ảnh · ${clips.length} video',
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
-                  Text(
-                    total >= cfg.minPhotos ? 'Hồ sơ $total ảnh · dự kiến ${money(cfg.payFor(total))}' : 'Cần ít nhất ${cfg.minPhotos} ảnh, còn thiếu ${cfg.minPhotos - total}',
-                    style: T.muted.copyWith(fontSize: 14),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 8, 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      spacing: 4,
+                      children: [
+                        Text(
+                          clips.isEmpty ? '${shots.length} ảnh vừa chụp' : '${shots.length} ảnh · ${clips.length} video',
+                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3),
+                        ),
+                        Text(
+                          total >= cfg.minPhotos
+                              ? 'Hồ sơ $total ảnh · dự kiến ${money(cfg.payFor(total))}'
+                              : 'Cần ít nhất ${cfg.minPhotos} ảnh, còn thiếu ${cfg.minPhotos - total}',
+                          style: T.muted.copyWith(fontSize: 14),
+                        ),
+                      ],
+                    ),
                   ),
-                ]),
+                  IconButton(tooltip: 'Đóng, chụp tiếp', onPressed: pct == null ? () => setState(() => review = false) : null, icon: const Ic('x', size: 26)),
+                ],
               ),
-              IconButton(tooltip: 'Đóng, chụp tiếp', onPressed: pct == null ? () => setState(() => review = false) : null, icon: const Ic('x', size: 26)),
-            ]),
-          ),
-          Expanded(
-            child: ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 16), children: [
-              PhotoGrid(children: [
-                for (var k = 0; k < shots.length; k++)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(R.ctl),
-                    child: Stack(fit: StackFit.expand, children: [
-                      localImage(shots[k].path, fit: BoxFit.cover, cacheWidth: 400),
-                      DelBtn(icon: 'trash', label: 'Bỏ ảnh ${k + 1}', onTap: pct == null ? () => drop(k) : null),
-                      Positioned(
-                        left: 8,
-                        bottom: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                          decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
-                          child: Text('${k + 1}', style: const TextStyle(color: C.text, fontSize: 11, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                children: [
+                  PhotoGrid(
+                    children: [
+                      for (var k = 0; k < shots.length; k++)
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(R.ctl),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              localImage(shots[k].path, fit: BoxFit.cover, cacheWidth: 400),
+                              DelBtn(icon: 'trash', label: 'Bỏ ảnh ${k + 1}', onTap: pct == null ? () => drop(k) : null),
+                              Positioned(
+                                left: 8,
+                                bottom: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(999)),
+                                  child: Text(
+                                    '${k + 1}',
+                                    style: const TextStyle(
+                                      color: C.text,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      fontFeatures: [FontFeature.tabularFigures()],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              CheckBadge(checks[shots[k].path]),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (clips.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Text('Video (${clips.length}/$maxVideos)', style: const TextStyle(fontWeight: FontWeight.w600, color: C.text)),
+                    for (var k = 0; k < clips.length; k++)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Row(
+                          spacing: 10,
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(R.ctl)),
+                              alignment: Alignment.center,
+                              child: const Ic('video', color: Colors.white, size: 20),
+                            ),
+                            Expanded(
+                              child: Text(
+                                'Video ${k + 1}${clips[k].secs > 0 ? ' · ${_clock(clips[k].secs)}' : ''} · ${mb(clips[k].bytes)}',
+                                style: const TextStyle(color: C.text, fontSize: 14),
+                              ),
+                            ),
+                            IconButton(tooltip: 'Bỏ video ${k + 1}', onPressed: pct == null ? () => dropClip(k) : null, icon: const Ic('trash', size: 20)),
+                          ],
                         ),
                       ),
-                      CheckBadge(checks[shots[k].path]),
-                    ]),
-                  ),
-              ]),
-              if (clips.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Text('Video (${clips.length}/$maxVideos)', style: const TextStyle(fontWeight: FontWeight.w600, color: C.text)),
-                for (var k = 0; k < clips.length; k++)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Row(spacing: 10, children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(R.ctl)),
-                        alignment: Alignment.center,
-                        child: const Ic('video', color: Colors.white, size: 20),
-                      ),
+                    if (videoTip().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(videoTip(), style: T.muted)),
+                  ],
+                ],
+              ),
+            ),
+            Container(
+              decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: C.line))),
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                spacing: 10,
+                children: [
+                  if (upWhat.isNotEmpty) Text(upWhat, style: T.muted),
+                  if (pct != null) Progress(pct: pct!, doneText: upWhat.isNotEmpty ? 'Đã tải xong video.' : 'Đã tải xong. Đang kiểm tra ảnh…'),
+                  if (ctName.isNotEmpty || ctPhone.isNotEmpty)
+                    Row(
+                      spacing: 8,
+                      children: [
+                        const Ic('check', color: C.ok, size: 18),
+                        Expanded(
+                          child: Text(
+                            'Nhà thầu (quét từ bảng hiệu): ${[if (ctName.isNotEmpty) ctName, if (ctPhone.isNotEmpty) prettyPhone(ctPhone)].join(' · ')}',
+                            style: const TextStyle(color: C.text, fontSize: 13.5, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        TextButton(onPressed: pct == null ? () => setState(() => ctName = ctPhone = '') : null, child: const Text('Bỏ')),
+                      ],
+                    ),
+                  if (sum.isNotEmpty)
+                    Note(tone: 'wait', icon: 'spark', title: 'AI: $sum', text: 'Ảnh chưa đạt không được tính tiền, bấm thùng rác để bỏ rồi chụp lại.'),
+                  if (err.isNotEmpty) Text(err, style: const TextStyle(color: C.bad)),
+                  Row(
+                    spacing: 8,
+                    children: [
+                      Btn('Chụp tiếp', icon: 'camera', onPressed: () => setState(() => review = false), disabled: pct != null),
                       Expanded(
-                        child: Text('Video ${k + 1}${clips[k].secs > 0 ? ' · ${_clock(clips[k].secs)}' : ''} · ${mb(clips[k].bytes)}',
-                            style: const TextStyle(color: C.text, fontSize: 14)),
+                        child: Btn(
+                          [if (shots.isNotEmpty) '${shots.length} ảnh', if (clips.isNotEmpty) '${clips.length} video'].isEmpty
+                              ? 'Tải lên'
+                              : 'Tải lên ${[if (shots.isNotEmpty) '${shots.length} ảnh', if (clips.isNotEmpty) '${clips.length} video'].join(' + ')}',
+                          icon: 'upload',
+                          kind: BtnKind.primary,
+                          onPressed: send,
+                          busy: pct != null,
+                          disabled: shots.isEmpty && clips.isEmpty,
+                        ),
                       ),
-                      IconButton(tooltip: 'Bỏ video ${k + 1}', onPressed: pct == null ? () => dropClip(k) : null, icon: const Ic('trash', size: 20)),
-                    ]),
+                    ],
                   ),
-                if (videoTip().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(videoTip(), style: T.muted)),
-              ],
-            ]),
-          ),
-          Container(
-            decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: C.line))),
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 10, children: [
-              if (upWhat.isNotEmpty) Text(upWhat, style: T.muted),
-              if (pct != null) Progress(pct: pct!, doneText: upWhat.isNotEmpty ? 'Đã tải xong video.' : 'Đã tải xong. Đang kiểm tra ảnh…'),
-              if (ctName.isNotEmpty || ctPhone.isNotEmpty)
-                Row(spacing: 8, children: [
-                  const Ic('check', color: C.ok, size: 18),
-                  Expanded(
-                    child: Text('Nhà thầu (quét từ bảng hiệu): ${[if (ctName.isNotEmpty) ctName, if (ctPhone.isNotEmpty) prettyPhone(ctPhone)].join(' · ')}',
-                        style: const TextStyle(color: C.text, fontSize: 13.5, fontWeight: FontWeight.w600)),
-                  ),
-                  TextButton(onPressed: pct == null ? () => setState(() => ctName = ctPhone = '') : null, child: const Text('Bỏ')),
-                ]),
-              if (sum.isNotEmpty)
-                Note(tone: 'wait', icon: 'spark', title: 'AI: $sum', text: 'Ảnh chưa đạt không được tính tiền, bấm thùng rác để bỏ rồi chụp lại.'),
-              if (err.isNotEmpty) Text(err, style: const TextStyle(color: C.bad)),
-              Row(spacing: 8, children: [
-                Btn('Chụp tiếp', icon: 'camera', onPressed: () => setState(() => review = false), disabled: pct != null),
-                Expanded(
-                  child: Btn(
-                      [if (shots.isNotEmpty) '${shots.length} ảnh', if (clips.isNotEmpty) '${clips.length} video'].isEmpty
-                          ? 'Tải lên'
-                          : 'Tải lên ${[if (shots.isNotEmpty) '${shots.length} ảnh', if (clips.isNotEmpty) '${clips.length} video'].join(' + ')}',
-                      icon: 'upload',
-                      kind: BtnKind.primary,
-                      onPressed: send,
-                      busy: pct != null,
-                      disabled: shots.isEmpty && clips.isEmpty),
-                ),
-              ]),
-            ]),
-          ),
-        ]),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1080,10 +1346,11 @@ class _LivePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final box = Paint()
-      ..color = C.amber
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5;
+    final box =
+        Paint()
+          ..color = C.amber
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.5;
     for (final p in [phone, company]) {
       if (p == null) continue;
       final r = Rect.fromLTRB(p.left * size.width - 4, p.top * size.height - 4, p.right * size.width + 4, p.bottom * size.height + 4);
@@ -1092,17 +1359,22 @@ class _LivePainter extends CustomPainter {
     final a = roll.abs();
     if (a > 3 && a < 60) {
       final c = size.center(Offset.zero), half = size.width * .32;
-      final level = Paint()
-        ..color = (a > 8 ? C.amber : Colors.white).withValues(alpha: .9)
-        ..strokeWidth = 2.5
-        ..strokeCap = StrokeCap.round;
+      final level =
+          Paint()
+            ..color = (a > 8 ? C.amber : Colors.white).withValues(alpha: .9)
+            ..strokeWidth = 2.5
+            ..strokeCap = StrokeCap.round;
       // vạch ngang thật (theo trọng lực) so với vạch ngang của máy
       final t = -roll * math.pi / 180;
       final d = Offset(math.cos(t) * half, math.sin(t) * half);
       canvas.drawLine(c - d, c + d, level);
-      canvas.drawLine(c - Offset(half * .25, 0), c + Offset(half * .25, 0), Paint()
-        ..color = Colors.white.withValues(alpha: .5)
-        ..strokeWidth = 1.5);
+      canvas.drawLine(
+        c - Offset(half * .25, 0),
+        c + Offset(half * .25, 0),
+        Paint()
+          ..color = Colors.white.withValues(alpha: .5)
+          ..strokeWidth = 1.5,
+      );
     }
   }
 

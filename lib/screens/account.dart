@@ -1,4 +1,5 @@
-// Tài khoản (GET /me): tài khoản nhận tiền, đổi mật khẩu, quy tắc, xoá tài khoản, đăng xuất.
+// Tài khoản (GET /me): tài khoản nhận tiền, quy tắc, xoá tài khoản, đăng xuất.
+// App vào bằng SĐT, không mật khẩu (20/11/2026): tài khoản nhận tiền đã lưu thì CTV không tự đổi, nhờ admin đổi.
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -19,7 +20,6 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
   String get path => '/me';
 
   BankCtl? bank;
-  final pwOld = TextEditingController(), pwNew = TextEditingController();
   String open = '';
   String op = '';
   String version = '';
@@ -28,8 +28,6 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
   @override
   void initState() {
     super.initState();
-    pwOld.addListener(() => setState(() {}));
-    pwNew.addListener(() => setState(() {}));
     PackageInfo.fromPlatform().then((p) {
       if (mounted) setState(() => version = p.version);
     }, onError: (_) {});
@@ -52,8 +50,6 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
   @override
   void dispose() {
     bank?.dispose();
-    pwOld.dispose();
-    pwNew.dispose();
     super.dispose();
   }
 
@@ -72,15 +68,19 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
   }
 
   Future<void> logout() async {
-    if (await confirm(context, title: 'Đăng xuất?', text: 'Bạn cần nhập lại số điện thoại và mật khẩu để vào app.', ok: 'Đăng xuất')) {
+    if (await confirm(context, title: 'Đăng xuất?', text: 'Lần sau mở app, nhập số điện thoại là vào lại.', ok: 'Đăng xuất')) {
       await setToken(null); // màn gốc tự về đăng nhập
     }
   }
 
   /// CH Play bắt buộc: CTV tự xoá tài khoản ngay trong app. Xong thì đăng xuất.
   Future<void> removeAccount(int owed) async {
-    final ok = await confirm(context,
-        title: 'Xoá vĩnh viễn tài khoản?', text: '${owed > 0 ? 'Bạn sẽ mất ${money(owed)} chưa được trả. ' : ''}Không khôi phục được.', ok: 'Xoá tài khoản');
+    final ok = await confirm(
+      context,
+      title: 'Xoá vĩnh viễn tài khoản?',
+      text: '${owed > 0 ? 'Bạn sẽ mất ${money(owed)} chưa được trả. ' : ''}Không khôi phục được.',
+      ok: 'Xoá tài khoản',
+    );
     if (!ok) return;
     try {
       final j = await delete('/me');
@@ -94,18 +94,27 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
   @override
   Widget build(BuildContext context) {
     final d = this.d;
-    return Column(children: [
-      const VtAppBar(title: 'Tài khoản', sub: 'Cộng tác viên', back: true),
-      Expanded(
-        child: d == null || bank == null
-            ? ListView(children: [
-                Loading(err: err, retry: load),
-                // Không tải được (mất mạng, máy chủ lỗi...): vẫn đăng xuất được, không bao giờ kẹt
-                if (err.isNotEmpty) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Btn('Đăng xuất', icon: 'logout', kind: BtnKind.danger, onPressed: logout)),
-              ])
-            : _body(d),
-      ),
-    ]);
+    return Column(
+      children: [
+        const VtAppBar(title: 'Tài khoản', sub: 'Cộng tác viên', back: true),
+        Expanded(
+          child:
+              d == null || bank == null
+                  ? ListView(
+                    children: [
+                      Loading(err: err, retry: load),
+                      // Không tải được (mất mạng, máy chủ lỗi...): vẫn đăng xuất được, không bao giờ kẹt
+                      if (err.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Btn('Đăng xuất', icon: 'logout', kind: BtnKind.danger, onPressed: logout),
+                        ),
+                    ],
+                  )
+                  : _body(d),
+        ),
+      ],
+    );
   }
 
   Widget _body(Json d) {
@@ -116,8 +125,13 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
     final owed = asInt(m?['owed']);
     final min = cfg.minPhotos;
     final hasBank = str(b['owner']).isNotEmpty;
+    final bankLocked = str(user['bank']).isNotEmpty; // máy chủ chặn CTV tự đổi khi đã có
     final rules = <(String, String)>[
-      ('image', 'Mỗi căn nhà: $min ảnh đạt = ${money(cfg.payFor(min))}, từ ${min + 1} ảnh = ${money(cfg.payFor(min + 1))}. Dưới $min ảnh không gửi được. ${videoTip()}'.trim()),
+      (
+        'image',
+        'Mỗi căn nhà: $min ảnh đạt = ${money(cfg.payFor(min))}, từ ${min + 1} ảnh = ${money(cfg.payFor(min + 1))}. Dưới $min ảnh không gửi được. ${videoTip()}'
+            .trim(),
+      ),
       ('clock', 'Ảnh chụp trong 30 ngày, có giờ và vị trí, thấy rõ công trình đang xây.'),
       ('spark', 'AI kiểm tra từng ảnh ngay khi tải lên và báo lỗi để bạn sửa trước khi gửi.'),
       ('shield', 'Admin duyệt hồ sơ. Ảnh trùng hoặc nhà đã nộp sẽ bị từ chối.'),
@@ -129,59 +143,71 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         // ---- hồ sơ cá nhân: thẻ nổi, ảnh đại diện tròn ----
-        Box(raised: true, padding: const EdgeInsets.all(20), children: [
-          Row(spacing: 16, children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: const BoxDecoration(gradient: navyGradient, shape: BoxShape.circle),
-              alignment: Alignment.center,
-              child: Text(initials(str(user['name'])),
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.amber, letterSpacing: 0.5)),
+        Box(
+          raised: true,
+          padding: const EdgeInsets.all(20),
+          children: [
+            Row(
+              spacing: 16,
+              children: [
+                Container(
+                  width: 64,
+                  height: 64,
+                  decoration: const BoxDecoration(gradient: navyGradient, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: Text(
+                    initials(str(user['name'])),
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.amber, letterSpacing: 0.5),
+                  ),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: 4,
+                    children: [
+                      Text(
+                        str(user['name']),
+                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.4, height: 1.2),
+                      ),
+                      Text(str(user['username']), style: T.muted.copyWith(fontSize: 14)),
+                      const Pill('Cộng tác viên', tone: 'done'),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
-                Text(str(user['name']), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.4, height: 1.2)),
-                Text(str(user['username']), style: T.muted.copyWith(fontSize: 14)),
-                const Pill('Cộng tác viên', tone: 'done'),
-              ]),
-            ),
-          ]),
-          if (str(user['email']).isNotEmpty) ...[
-            const Divider(height: 1, color: C.line),
-            Row(spacing: 8, children: [
-              const Ic('user', color: C.muted, size: 16),
-              Expanded(child: Text('Google: ${str(user['email'])}', style: T.muted)),
-            ]),
+            if (str(user['email']).isNotEmpty) ...[
+              const Divider(height: 1, color: C.line),
+              Row(spacing: 8, children: [const Ic('user', color: C.muted, size: 16), Expanded(child: Text('Google: ${str(user['email'])}', style: T.muted))]),
+            ],
           ],
-        ]),
+        ),
 
         // ---- thanh toán ----
         const _Group('Thanh toán'),
-        _fold('bank', 'bank', 'Tài khoản nhận tiền',
-            hasBank ? '${str(b['name'])} · ${str(b['no'])}' : (str(user['bank']).isNotEmpty ? 'Cần nhập lại theo 3 ô' : 'Chưa có, bấm để thêm'), [
-          if (!hasBank && str(user['bank']).isNotEmpty)
-            Text('Đang lưu: “${str(user['bank'])}”. Nhập lại theo 3 ô dưới để kế toán chuyển nhanh, đúng.', style: T.muted.copyWith(color: C.alert)),
-          BankFields(c: bank!),
-          Btn('Lưu tài khoản', kind: BtnKind.primary, busy: op == 'bank', onPressed: () => save('bank', '/me/bank', bank!.toJson())),
-        ], warn: !hasBank),
+        if (bankLocked)
+          // đã có tài khoản nhận tiền: chỉ xem, đổi thì nhờ admin (ai biết SĐT cũng vào được app)
+          _fold('bank', 'bank', 'Tài khoản nhận tiền', hasBank ? '${str(b['name'])} · ${str(b['no'])}' : str(user['bank']), [
+            if (hasBank) ...[
+              FieldCell('Ngân hàng', str(b['name'])),
+              FieldCell('Số tài khoản', str(b['no'])),
+              FieldCell('Chủ tài khoản', str(b['owner'])),
+            ] else
+              Text(str(user['bank']), style: T.body),
+            const Text(
+              'Muốn đổi tài khoản nhận tiền, liên hệ admin Vua Thầu để đổi giúp. App không cho tự đổi để tránh người khác đổi sang tài khoản của họ.',
+              style: T.muted,
+            ),
+          ])
+        else
+          _fold('bank', 'bank', 'Tài khoản nhận tiền', 'Chưa có, bấm để thêm', [
+            const Text('Kiểm tra kỹ trước khi lưu: đã lưu thì muốn đổi phải nhờ admin.', style: T.muted),
+            BankFields(c: bank!),
+            Btn('Lưu tài khoản', kind: BtnKind.primary, busy: op == 'bank', onPressed: () => save('bank', '/me/bank', bank!.toJson())),
+          ], warn: true),
 
-        // ---- bảo mật ----
-        const _Group('Đăng nhập và bảo mật'),
-        _fold('pw', 'lock', 'Đổi mật khẩu', 'Ít nhất 6 ký tự', [
-          Field(label: 'Mật khẩu hiện tại', controller: pwOld, obscure: true, autofill: const [AutofillHints.password]),
-          Field(label: 'Mật khẩu mới', controller: pwNew, obscure: true, autofill: const [AutofillHints.newPassword], hint: 'Ít nhất 6 ký tự.'),
-          Btn('Đổi mật khẩu',
-              kind: BtnKind.primary,
-              busy: op == 'pw',
-              disabled: pwOld.text.isEmpty || pwNew.text.length < 6,
-              onPressed: () => save('pw', '/me/password', {'old': pwOld.text, 'new': pwNew.text}, (j) {
-                    // token cũ hết hiệu lực: dùng token mới máy chủ trả
-                    if (j['access_token'] is String) setToken(j['access_token'] as String);
-                    pwOld.clear();
-                    pwNew.clear();
-                  })),
-        ]),
+        // ---- tài khoản ----
+        const _Group('Tài khoản'),
         if (hasOwed)
           _fold('del', 'trash', 'Xoá tài khoản', 'Xoá vĩnh viễn, không khôi phục được', [
             const Text(
@@ -190,8 +216,10 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
               style: TextStyle(color: C.text, height: 1.4),
             ),
             if (owed > 0)
-              Text('Bạn còn ${money(owed)} chưa được trả. Xoá tài khoản thì kế toán không chuyển được số tiền này.',
-                  style: const TextStyle(color: C.bad, fontWeight: FontWeight.w600, height: 1.4)),
+              Text(
+                'Bạn còn ${money(owed)} chưa được trả. Xoá tài khoản thì kế toán không chuyển được số tiền này.',
+                style: const TextStyle(color: C.bad, fontWeight: FontWeight.w600, height: 1.4),
+              ),
             Btn('Xoá vĩnh viễn tài khoản', icon: 'trash', kind: BtnKind.danger, onPressed: () => removeAccount(owed)),
           ]),
 
@@ -199,16 +227,22 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
         const _Group('Hỗ trợ'),
         _fold('rules', 'book', 'Quy tắc nghiệm thu', 'Ảnh đạt, tiền hồ sơ, thanh toán', [
           for (final (ic, t) in rules)
-            Row(crossAxisAlignment: CrossAxisAlignment.start, spacing: 12, children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: const BoxDecoration(color: C.blueBg, shape: BoxShape.circle),
-                alignment: Alignment.center,
-                child: Ic(ic, color: C.navy3, size: 16),
-              ),
-              Expanded(child: Padding(padding: const EdgeInsets.only(top: 5), child: Text(t, style: const TextStyle(color: C.text, fontSize: 14, height: 1.45)))),
-            ]),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 12,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: const BoxDecoration(color: C.blueBg, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: Ic(ic, color: C.navy3, size: 16),
+                ),
+                Expanded(
+                  child: Padding(padding: const EdgeInsets.only(top: 5), child: Text(t, style: const TextStyle(color: C.text, fontSize: 14, height: 1.45))),
+                ),
+              ],
+            ),
         ]),
 
         const SizedBox(height: 28),
@@ -234,29 +268,40 @@ class _AccountScreenState extends State<AccountScreen> with PageData {
     final on = open == id;
     return Container(
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: C.line))),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Semantics(
-          expanded: on,
-          button: true,
-          child: InkWell(
-            onTap: () => setState(() => open = on ? '' : id),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Row(spacing: 14, children: [
-                Ic(icon, color: C.text, size: 22),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 2, children: [
-                    Text(title, style: const TextStyle(fontSize: 16, color: C.text)),
-                    Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: T.muted.copyWith(color: warn ? C.wait : C.muted)),
-                  ]),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            expanded: on,
+            button: true,
+            child: InkWell(
+              onTap: () => setState(() => open = on ? '' : id),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  spacing: 14,
+                  children: [
+                    Ic(icon, color: C.text, size: 22),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        spacing: 2,
+                        children: [
+                          Text(title, style: const TextStyle(fontSize: 16, color: C.text)),
+                          Text(sub, maxLines: 1, overflow: TextOverflow.ellipsis, style: T.muted.copyWith(color: warn ? C.wait : C.muted)),
+                        ],
+                      ),
+                    ),
+                    AnimatedRotation(turns: on ? 0.25 : 0, duration: const Duration(milliseconds: 150), child: const Ic('right', color: C.text, size: 18)),
+                  ],
                 ),
-                AnimatedRotation(turns: on ? 0.25 : 0, duration: const Duration(milliseconds: 150), child: const Ic('right', color: C.text, size: 18)),
-              ]),
+              ),
             ),
           ),
-        ),
-        if (on) Padding(padding: const EdgeInsets.only(bottom: 20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: children)),
-      ]),
+          if (on)
+            Padding(padding: const EdgeInsets.only(bottom: 20), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: children)),
+        ],
+      ),
     );
   }
 }
@@ -267,7 +312,7 @@ class _Group extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 32, bottom: 4),
-        child: Text(text, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
-      );
+    padding: const EdgeInsets.only(top: 32, bottom: 4),
+    child: Text(text, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3)),
+  );
 }
