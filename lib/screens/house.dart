@@ -215,13 +215,6 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                 if (editable && ps.length < cfg.maxPhotos) ...[
                   Btn('Chụp thêm bằng camera',
                       icon: 'camera', kind: BtnKind.dark, onPressed: () => push(context, CameraScreen(hid: widget.id, have: ps.length))),
-                  PhotoPicker(
-                    path: '/houses/${widget.id}/photos',
-                    have: ps.length,
-                    valid: valid,
-                    onUploaded: (_) => load(),
-                    title: 'Thêm ảnh có sẵn${valid < min ? ' · cần thêm ${min - valid} ảnh đạt' : ''}',
-                  ),
                 ],
 
                 // ---- Video công trình (không qua AI; có video được cộng thưởng cfg.videoBonus) ----

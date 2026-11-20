@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../page.dart';
 import '../ui.dart';
+import 'camera.dart';
 import 'home_shell.dart';
 import 'house.dart';
 
@@ -73,8 +74,8 @@ class _HousesScreenState extends State<HousesScreen> with PageData {
                               icon: 'building',
                               title: 'Nộp hồ sơ đầu tiên',
                               text: 'Chụp công trình đang xây (ít nhất ${cfg.minPhotos} ảnh) rồi tải lên.',
-                              cta: 'Nộp ảnh công trình',
-                              onTap: () => tabIndex.value = tabShoot,
+                              cta: 'Chụp ảnh công trình',
+                              onTap: () => openCamera(context),
                             );
                     }
                     return _row(d, rows, i - 1);

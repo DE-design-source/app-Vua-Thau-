@@ -1,4 +1,4 @@
-// 3 tab dưới đáy: Hồ sơ · Chụp hình (nút tròn vàng nổi ở giữa) · Bản đồ.
+// Thanh dưới đáy: tab Hồ sơ · nút Chụp hình (tròn vàng nổi ở giữa, mở thẳng camera) · tab Bản đồ.
 // Thu nhập và Tài khoản: 2 nút góc trên bên phải (TopActions), mở thành trang riêng.
 // Tab chỉ dựng khi mở lần đầu, chọn lại là tải mới.
 import 'package:flutter/material.dart';
@@ -10,7 +10,7 @@ import 'account.dart';
 import 'houses.dart';
 import 'income.dart';
 import 'map.dart';
-import 'submit.dart';
+import 'camera.dart';
 
 final tabIndex = ValueNotifier<int>(0);
 
@@ -51,7 +51,8 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
   @override
   void initState() {
     super.initState();
-    if (tabIndex.value > tabMap) tabIndex.value = tabHouses;
+    if (tabIndex.value > tabMap || tabIndex.value == tabShoot) tabIndex.value = tabHouses;
+    warmCamera(); // bấm Chụp hình là camera lên ngay
     opened.add(tabIndex.value);
     tabIndex.addListener(_changed);
   }
@@ -95,7 +96,7 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
     if (!opened.contains(i)) return const SizedBox.shrink();
     return switch (i) {
       tabHouses => HousesScreen(key: keys[0]),
-      tabShoot => SubmitScreen(key: keys[1]),
+      tabShoot => const SizedBox.shrink(), // nút Chụp hình mở camera, không còn tab riêng
       _ => MapScreen(key: keys[2]),
     };
   }
@@ -124,7 +125,7 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
                     onTap: () => _go(tabHouses),
                   ),
                 ),
-                Expanded(child: _ShootItem(on: i == tabShoot, onTap: () => _go(tabShoot))),
+                Expanded(child: _ShootItem(on: false, onTap: () => openCamera(context))),
                 Expanded(
                   child: _NavItem(
                     label: 'Bản đồ',

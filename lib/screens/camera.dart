@@ -25,7 +25,6 @@ import '../toast.dart';
 import '../ui.dart';
 import '../video.dart' show maxVideos, mb, videoLimit, videoMime;
 import 'house.dart';
-import 'submit.dart' show houseIdOf;
 
 class _Clip {
   _Clip(this.path, this.name, this.bytes, this.secs);
@@ -34,6 +33,31 @@ class _Clip {
 }
 
 const _maxClip = Duration(minutes: 3);
+
+// Danh sách camera của máy: hỏi 1 lần, dùng lại (lần đầu CameraX khởi động ~0,3-1 giây).
+Future<List<CameraDescription>>? _cams;
+Future<List<CameraDescription>> _cameras() => _cams ??= availableCameras().then((v) {
+      if (v.isEmpty) _cams = null;
+      return v;
+    }, onError: (Object e) {
+      _cams = null;
+      throw e;
+    });
+
+/// Gọi sớm (mở app) để bấm Chụp hình là camera lên ngay. Bản web bỏ qua (trình duyệt sẽ hỏi quyền camera).
+void warmCamera() {
+  if (!kIsWeb) _cameras().ignore();
+}
+
+/// Mở camera chụp hồ sơ mới.
+void openCamera(BuildContext context) => push(context, const CameraScreen());
+
+/// Kết quả POST /houses: {house_id: 123} -> 123; house_id null (không ảnh nào được nhận) -> null
+int? houseIdOf(Json j) {
+  final v = j['house_id'];
+  final id = v is num ? v.toInt() : int.tryParse('${v ?? ''}');
+  return id != null && id > 0 ? id : null;
+}
 
 class _Shot {
   _Shot(this.path, this.meta);
@@ -60,6 +84,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   DateTime now = DateTime.now();
   final shots = <_Shot>[];
   bool busy = false, review = false, torch = false;
+  int stamping = 0; // ảnh đã chụp, đang in giờ / vị trí (chạy nền)
+  Future<void> _stamps = Future.value(); // chuỗi in chữ: lần lượt từng ảnh, giữ thứ tự
+  bool flash = false; // chớp trắng lúc bấm chụp
   final clips = <_Clip>[]; // video vừa quay, chưa tải lên
   bool videoMode = false, recording = false;
   DateTime? recAt;
@@ -127,18 +154,14 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   Future<void> _openCam() async {
     try {
-      final all = await availableCameras();
+      final all = await _cameras();
       if (all.isEmpty) throw CameraException('none', 'Máy không có camera');
       final back = all.firstWhere((c) => c.lensDirection == CameraLensDirection.back, orElse: () => all.first);
-      final c = CameraController(back, ResolutionPreset.max, enableAudio: false, imageFormatGroup: liveImageFormat());
+      // 1920x1080 (không lấy "max"): CameraX dùng CÙNG độ phân giải cho khung ngắm, ảnh chụp và luồng khung hình quét chữ.
+      // "max" (12-50 MP) làm mỗi khung hình quét chữ nặng hàng chục MB -> mở camera chậm, khung ngắm giật, chụp lâu;
+      // trong khi ảnh nộp lên vẫn bị thu về 1920px (stamp.dart). Video 6 Mbit/s: 3 phút ~ 135 MB, dưới giới hạn 200 MB.
+      final c = CameraController(back, ResolutionPreset.veryHigh, enableAudio: false, imageFormatGroup: liveImageFormat(), videoBitrate: 6000000);
       await c.initialize();
-      // bản web: trình duyệt có thể không khoá xoay / không có đèn, bỏ qua
-      try {
-        await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
-      } catch (_) {}
-      try {
-        await c.setFlashMode(torch ? FlashMode.torch : FlashMode.off);
-      } catch (_) {}
       if (!mounted) {
         c.dispose();
         return;
@@ -148,6 +171,14 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         camReady = true;
         denied = false;
       });
+      // khung ngắm hiện trước, phần còn lại làm sau. Bản web: trình duyệt có thể không khoá xoay / không có đèn, bỏ qua
+      try {
+        await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
+      } catch (_) {}
+      try {
+        await c.setFlashMode(torch ? FlashMode.torch : FlashMode.off);
+      } catch (_) {}
+      if (!mounted || cam != c) return;
       live.start(c);
     } on CameraException catch (e) {
       if (e.code.startsWith('CameraAccess')) {
@@ -182,6 +213,19 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         setState(() => gpsErr = 'Chưa cho phép Vị trí');
         return;
       }
+      // GPS bật nguội mất vài giây mới có toạ độ: dùng vị trí máy vừa biết (≤ 90 giây, sai số ≤ 50 m) để chụp được ngay,
+      // luồng GPS bên dưới cập nhật lại liền sau đó.
+      if (!kIsWeb && pos == null) {
+        try {
+          final l = await Geolocator.getLastKnownPosition();
+          if (l != null && mounted && pos == null && l.accuracy <= 50 && DateTime.now().difference(l.timestamp).inSeconds.abs() <= 90) {
+            final cur = Pos(l.latitude, l.longitude, l.accuracy);
+            setState(() => pos = cur);
+            looked = cur;
+            _lookup(cur);
+          }
+        } catch (_) {}
+      }
       gps = Geolocator.getPositionStream(
         locationSettings: AndroidSettings(accuracy: LocationAccuracy.high, distanceFilter: 1, intervalDuration: const Duration(seconds: 2)),
       ).listen((l) {
@@ -202,6 +246,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   Future<void> leave() async {
     if (recording) await _stopRec();
+    await _stamps;
     if (!mounted) return;
     if ((shots.isEmpty && clips.isEmpty) ||
         await confirm(context, title: 'Bỏ ảnh, video vừa chụp?', text: 'Ảnh, video chưa tải lên sẽ mất.', ok: 'Bỏ', cancel: 'Ở lại')) {
@@ -289,7 +334,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   String _clock(int s) => '${p2(s ~/ 60)}:${p2(s % 60)}';
 
-  bool get canShoot => camReady && pos != null && !busy && shots.length < left;
+  bool get canShoot => camReady && pos != null && !busy && shots.length + stamping < left;
+  bool get hasMedia => shots.isNotEmpty || clips.isNotEmpty || stamping > 0;
 
   Future<void> shoot() async {
     final c = cam;
@@ -297,12 +343,41 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     final date = DateTime.now(), p = pos!, a = addr;
     // chụp trúng bảng hiệu: giữ SĐT / tên đang thấy cho ảnh này
     final seenPhone = live.phone, seenName = live.company;
-    setState(() => busy = true);
+    setState(() {
+      busy = true;
+      flash = true;
+    });
     live.paused = true;
     HapticFeedback.mediumImpact();
+    Future.delayed(const Duration(milliseconds: 90), () {
+      if (mounted) setState(() => flash = false);
+    });
+    final XFile raw;
     try {
-      final raw = await c.takePicture();
-      final path = await stampPhoto(raw.path, StampData(date, p, a));
+      raw = await c.takePicture();
+    } catch (e) {
+      toast('Chụp không được: $e');
+      live.paused = stamping > 0;
+      if (mounted) setState(() => busy = false);
+      return;
+    }
+    // máy chụp xong là bấm chụp tiếp được; in giờ / vị trí lên ảnh chạy nền
+    if (mounted) {
+      setState(() {
+        busy = false;
+        stamping++;
+      });
+    }
+    _stamps = _stamps.then((_) => _stamp(raw.path, date, p, a, seenName, seenPhone));
+  }
+
+  Future<void> _stamp(String rawPath, DateTime date, Pos p, String a, String seenName, String seenPhone) async {
+    try {
+      final path = await stampPhoto(rawPath, StampData(date, p, a));
+      if (!mounted) {
+        deleteLocal(path);
+        return;
+      }
       final meta = <String, Object>{
         't': '${date.year}-${p2(date.month)}-${p2(date.day)} ${p2(date.hour)}:${p2(date.minute)}',
         'lat': p.lat,
@@ -322,11 +397,17 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (firstSign) toast('Đã lưu nhà thầu từ bảng hiệu: ${[if (seenName.isNotEmpty) seenName, if (seenPhone.isNotEmpty) prettyPhone(seenPhone)].join(' · ')}');
       checks.run(path, meta: meta);
     } catch (e) {
-      toast('Chụp không được: $e');
+      toast('In giờ, vị trí lên ảnh không được: $e');
     } finally {
-      live.paused = false;
-      if (mounted) setState(() => busy = false);
+      if (mounted) setState(() => stamping--);
+      live.paused = stamping > 0 || busy;
     }
+  }
+
+  /// Mở màn xem lại: chờ các ảnh đang in chữ xong.
+  Future<void> _openReview() async {
+    await _stamps;
+    if (mounted && (shots.isNotEmpty || clips.isNotEmpty)) setState(() => review = true);
   }
 
   void drop(int k) {
@@ -339,6 +420,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   Future<void> send() async {
     if (recording) await _stopRec();
+    await _stamps;
     final target = widget.hid > 0 ? widget.hid : doneHid;
     if (shots.isEmpty && target == null) {
       setState(() => err = 'Chụp ít nhất 1 ảnh để tạo hồ sơ, rồi mới tải video lên.');
@@ -427,7 +509,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: PopScope(
-        canPop: shots.isEmpty && clips.isEmpty && pct == null && !recording,
+        canPop: !hasMedia && pct == null && !recording,
         onPopInvokedWithResult: (didPop, _) {
           if (didPop) return;
           if (review) {
@@ -462,7 +544,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 ),
                 const Text('Chưa cho phép Camera',
                     textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w600, letterSpacing: -0.3)),
-                const Text('Cho app dùng camera để chụp ảnh nghiệm thu. Bạn vẫn có thể chọn ảnh có sẵn.',
+                const Text('Cho app dùng camera để chụp ảnh nghiệm thu: vào Cài đặt của máy, mục Ứng dụng, Vua Thầu, Quyền, bật Camera.',
                     textAlign: TextAlign.center, style: TextStyle(color: C.heroMuted, height: 1.45)),
                 const SizedBox(height: 6),
                 Btn('Mở cài đặt để cho phép', kind: BtnKind.primary, onPressed: () => Geolocator.openAppSettings()),
@@ -478,12 +560,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       );
 
   Widget _camera() {
-    final n = widget.have + shots.length, min = cfg.minPhotos;
+    final n = widget.have + shots.length + stamping, min = cfg.minPhotos;
     final last = shots.isNotEmpty ? checks[shots.last.path] : null;
     final p = pos;
     final hint = p == null
         ? (gpsErr.isNotEmpty ? 'Ảnh nghiệm thu bắt buộc có vị trí. Bật quyền Vị trí cho app trong cài đặt máy.' : 'Đang chờ GPS để chụp. Ảnh nghiệm thu bắt buộc có vị trí.')
-        : shots.length >= left
+        : shots.length + stamping >= left
             ? 'Đã đủ số ảnh tối đa của hồ sơ. Bấm Xong để tải lên.'
             : n < min
                 ? 'Chụp thêm ${min - n} ảnh nữa để đủ $min ảnh.'
@@ -592,14 +674,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                         ),
                       ),
                     Positioned(left: 10, right: 10, top: 10, child: _liveTop()),
-                    if (busy)
-                      Container(
-                        color: Colors.black.withValues(alpha: .35),
-                        child: const Column(mainAxisAlignment: MainAxisAlignment.center, spacing: 10, children: [
-                          CircularProgressIndicator(color: Colors.white),
-                          Text('Đang in giờ, vị trí lên ảnh…', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                        ]),
+                    IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: flash ? 0.55 : 0,
+                        duration: Duration(milliseconds: flash ? 0 : 160),
+                        child: const ColoredBox(color: Colors.white, child: SizedBox.expand()),
                       ),
+                    ),
                   ]),
                 ),
               ),
@@ -684,7 +765,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   button: true,
                   label: 'Xem ảnh vừa chụp',
                   child: GestureDetector(
-                    onTap: shots.isEmpty && clips.isEmpty ? null : () => setState(() => review = true),
+                    onTap: hasMedia ? _openReview : null,
                     child: SizedBox(
                       width: 60,
                       height: 60,
@@ -699,11 +780,19 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                             borderRadius: BorderRadius.circular(R.card),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: shots.isNotEmpty
-                              ? localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200)
-                              : Center(child: Ic(clips.isNotEmpty ? 'video' : 'image', color: Colors.white54, size: 22)),
+                          child: Stack(fit: StackFit.expand, children: [
+                            shots.isNotEmpty
+                                ? localImage(shots.last.path, fit: BoxFit.cover, cacheWidth: 200)
+                                : Center(child: Ic(clips.isNotEmpty ? 'video' : 'image', color: Colors.white54, size: 22)),
+                            // ảnh vừa chụp đang in giờ / vị trí (chạy nền, vẫn chụp tiếp được)
+                            if (stamping > 0)
+                              const ColoredBox(
+                                color: Color(0x66000000),
+                                child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))),
+                              ),
+                          ]),
                         ),
-                        if (shots.isNotEmpty || clips.isNotEmpty)
+                        if (hasMedia)
                           Positioned(
                             right: -2,
                             top: -2,
@@ -713,7 +802,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                               padding: const EdgeInsets.symmetric(horizontal: 5),
                               decoration: BoxDecoration(color: C.amber, borderRadius: BorderRadius.circular(999), border: Border.all(color: Colors.black, width: 1.5)),
                               alignment: Alignment.center,
-                              child: Text('${shots.length + clips.length}',
+                              child: Text('${shots.length + stamping + clips.length}',
                                   style: const TextStyle(color: C.amberInk, fontWeight: FontWeight.w700, fontSize: 12, fontFeatures: [FontFeature.tabularFigures()])),
                             ),
                           ),
@@ -774,7 +863,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               child: Align(
                 alignment: Alignment.centerRight,
                 child: Opacity(
-                  opacity: shots.isEmpty && clips.isEmpty || recording ? 0.4 : 1,
+                  opacity: !hasMedia || recording ? 0.4 : 1,
                   child: Material(
                     color: Colors.transparent,
                     shape: const StadiumBorder(),
@@ -782,13 +871,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     child: Ink(
                       decoration: const ShapeDecoration(gradient: blueGradient, shape: StadiumBorder()),
                       child: InkWell(
-                        onTap: shots.isEmpty && clips.isEmpty || recording ? null : () => setState(() => review = true),
+                        onTap: !hasMedia || recording ? null : _openReview,
                         child: Container(
                           height: 44,
                           padding: const EdgeInsets.symmetric(horizontal: 18),
                           child: Center(
                             widthFactor: 1,
-                            child: Text(shots.isNotEmpty || clips.isNotEmpty ? 'Xong · ${shots.length + clips.length}' : 'Xong',
+                            child: Text(hasMedia ? 'Xong · ${shots.length + stamping + clips.length}' : 'Xong',
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 15)),
                           ),
                         ),
