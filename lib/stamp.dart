@@ -172,12 +172,21 @@ Future<String> stampPhoto(String path, StampData d) async {
   final codec = await ui.instantiateImageCodec(await readLocal(path));
   final pic = (await codec.getNextFrame()).image;
   final k = math.min(1.0, _maxSide / math.max(pic.width, pic.height));
-  final W = (pic.width * k).round(), H = (pic.height * k).round();
+  // App chỉ chụp dọc (khoá xoay). Ảnh ra NGANG (máy không xoay theo EXIF): xoay 90° theo chiều kim đồng hồ cho dọc lại.
+  final turn = !kIsWeb && pic.width > pic.height;
+  final sw = (pic.width * k).round(), sh = (pic.height * k).round();
+  final W = turn ? sh : sw, H = turn ? sw : sh;
 
   final rec = ui.PictureRecorder();
   final c = Canvas(rec);
-  c.drawImageRect(pic, Rect.fromLTWH(0, 0, pic.width.toDouble(), pic.height.toDouble()), Rect.fromLTWH(0, 0, W.toDouble(), H.toDouble()),
+  c.save();
+  if (turn) {
+    c.translate(W.toDouble(), 0);
+    c.rotate(math.pi / 2);
+  }
+  c.drawImageRect(pic, Rect.fromLTWH(0, 0, pic.width.toDouble(), pic.height.toDouble()), Rect.fromLTWH(0, 0, sw.toDouble(), sh.toDouble()),
       Paint()..filterQuality = FilterQuality.medium);
+  c.restore();
   paintStamp(c, W.toDouble(), H.toDouble(), d);
   final out = await rec.endRecording().toImage(W, H);
   pic.dispose();

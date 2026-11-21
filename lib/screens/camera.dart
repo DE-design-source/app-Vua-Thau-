@@ -168,6 +168,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       // trong khi ảnh nộp lên vẫn bị thu về 1920px (stamp.dart). Video 6 Mbit/s: 3 phút ~ 135 MB, dưới giới hạn 200 MB.
       final c = CameraController(back, ResolutionPreset.veryHigh, enableAudio: false, imageFormatGroup: liveImageFormat(), videoBitrate: 6000000);
       await c.initialize();
+      // khoá dọc TRƯỚC khi hiện khung ngắm: chưa khoá thì khung ngắm xoay theo cảm biến (cầm nghiêng là nằm ngang).
+      // Bản web: trình duyệt có thể không khoá xoay, bỏ qua
+      try {
+        await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
+      } catch (_) {}
       if (!mounted) {
         c.dispose();
         return;
@@ -189,10 +194,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           });
         }
       } catch (_) {}
-      // khung ngắm hiện trước, phần còn lại làm sau. Bản web: trình duyệt có thể không khoá xoay / không có đèn, bỏ qua
-      try {
-        await c.lockCaptureOrientation(DeviceOrientation.portraitUp);
-      } catch (_) {}
+      // đèn làm sau khi khung ngắm đã hiện (bản web có thể không có đèn, bỏ qua)
       try {
         await c.setFlashMode(torch ? FlashMode.torch : FlashMode.off);
       } catch (_) {}
@@ -780,7 +782,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 // Khung ngắm cùng tỷ lệ với ảnh (camera 1080p = 16:9, cầm dọc thành 9:16), vừa khít vùng trống, không cắt ảnh:
                 // thấy gì chụp nấy, dải chữ trên khung ngắm nằm đúng chỗ như trên ảnh.
                 final c = cam;
-                final ar = c != null && camReady && c.value.aspectRatio > 0 ? c.value.aspectRatio : 16 / 9; // dài / ngắn
+                // dài / ngắn (>= 1): máy báo tỷ lệ theo chiều nào cũng vậy, khung ngắm luôn DỌC
+                final raw = c != null && camReady && c.value.aspectRatio > 0 ? c.value.aspectRatio : 16 / 9;
+                final ar = raw >= 1 ? raw : 1 / raw;
                 final fw = math.min(box.maxWidth, box.maxHeight / ar), fh = fw * ar;
                 return Center(
                   child: ClipRRect(
@@ -802,7 +806,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                               FittedBox(
                                 fit: BoxFit.cover,
                                 clipBehavior: Clip.hardEdge,
-                                child: SizedBox(width: fw, height: fw * c.value.aspectRatio, child: CameraPreview(c)),
+                                child: SizedBox(width: fw, height: fw * ar, child: CameraPreview(c)),
                               )
                             else
                               const Center(child: CircularProgressIndicator(color: Colors.white)),
