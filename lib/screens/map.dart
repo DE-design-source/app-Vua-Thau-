@@ -20,7 +20,7 @@ const _vn = LatLng(16.0, 106.2);
 
 // Nền bản đồ kiểu Airbnb: cùng file kiểu với web (máy chủ phục vụ /map-style.json, vector OpenFreeMap tô lại màu).
 // Đọc 1 lần cho cả phiên. Lỗi (mất mạng, máy chủ cũ): dùng nền OSM qua /tiles.
-final Future<vmt.Style> _mapStyle = vmt.StyleReader(uri: '$host/map-style.json').read();
+final Future<vmt.Style> mapStyle = vmt.StyleReader(uri: '$host/map-style.json').read();
 
 // Công trình theo lần chụp: chưa quá số ngày chặn trùng vàng nhạt, quá thì xanh lá (cần cập nhật, được chụp lại)
 // vàng: chụp chưa quá hạn (giống web); xanh lá tươi: cần cập nhật
@@ -230,7 +230,7 @@ class _MapScreenState extends State<MapScreen> with PageData {
             ),
             children: [
               FutureBuilder<vmt.Style>(
-                future: _mapStyle,
+                future: mapStyle,
                 builder: (context, s) {
                   final st = s.data;
                   if (st != null) {

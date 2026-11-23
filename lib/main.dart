@@ -10,7 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
 import 'page.dart';
 import 'screens/home_shell.dart';
-import 'screens/login.dart';
+import 'screens/guest.dart';
 import 'toast.dart';
 import 'ui.dart';
 
@@ -165,7 +165,8 @@ class _BootState extends State<Boot> {
     }
     return ValueListenableBuilder<bool>(
       valueListenable: authed,
-      builder: (context, ok, _) => ok ? const HomeShell() : const LoginScreen(),
+      // chưa đăng nhập: bản free (bản đồ, công trình, quy hoạch), có nút Đăng nhập (góp ý 23/11/2026)
+      builder: (context, ok, _) => ok ? const HomeShell() : const GuestShell(),
     );
   }
 }
