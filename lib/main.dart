@@ -11,7 +11,6 @@ import 'api.dart';
 import 'page.dart';
 import 'screens/home_shell.dart';
 import 'screens/login.dart';
-import 'screens/nt.dart';
 import 'toast.dart';
 import 'ui.dart';
 
@@ -37,12 +36,8 @@ class VuaThauApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: 'BeVietnamPro',
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: C.navy,
-          primary: C.blue,
-          secondary: C.amber,
-          surface: Colors.white,
-        ).copyWith(surfaceTint: Colors.transparent, outline: C.field, outlineVariant: C.line, error: C.bad),
+        colorScheme: ColorScheme.fromSeed(seedColor: C.navy, primary: C.blue, secondary: C.amber, surface: Colors.white)
+            .copyWith(surfaceTint: Colors.transparent, outline: C.field, outlineVariant: C.line, error: C.bad),
         scaffoldBackgroundColor: C.bg,
         dividerColor: C.line,
         dividerTheme: const DividerThemeData(color: C.line, thickness: 1, space: 1),
@@ -133,14 +128,12 @@ class _BootState extends State<Boot> {
       final code = (j['code'] as num?)?.toInt() ?? 0;
       final ctx = navKey.currentContext;
       if (code <= mine || ctx == null || !ctx.mounted) return;
-      final ok = await confirm(
-        ctx,
-        title: 'Có bản app mới',
-        text: 'Bản ${j['version']} đã có. Tải về và cài đè lên, tài khoản và hồ sơ vẫn giữ nguyên.',
-        ok: 'Tải về',
-        cancel: 'Để sau',
-        danger: false,
-      );
+      final ok = await confirm(ctx,
+          title: 'Có bản app mới',
+          text: 'Bản ${j['version']} đã có. Tải về và cài đè lên, tài khoản và hồ sơ vẫn giữ nguyên.',
+          ok: 'Tải về',
+          cancel: 'Để sau',
+          danger: false);
       if (ok) await launchUrl(Uri.parse('$host/tai-app'), mode: LaunchMode.externalApplication);
     } catch (_) {}
   }
@@ -158,20 +151,13 @@ class _BootState extends State<Boot> {
           body: Center(
             child: Padding(
               padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                spacing: 16,
-                children: [
-                  const Ic('alert', color: C.amber, size: 40),
-                  const Text(
-                    'Không kết nối được máy chủ',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                  const Text('Kiểm tra Wi-Fi hoặc 4G rồi thử lại.', textAlign: TextAlign.center, style: TextStyle(color: C.heroMuted)),
-                  Btn('Thử lại', kind: BtnKind.primary, onPressed: run),
-                ],
-              ),
+              child: Column(mainAxisSize: MainAxisSize.min, spacing: 16, children: [
+                const Ic('alert', color: C.amber, size: 40),
+                const Text('Không kết nối được máy chủ',
+                    textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600)),
+                const Text('Kiểm tra Wi-Fi hoặc 4G rồi thử lại.', textAlign: TextAlign.center, style: TextStyle(color: C.heroMuted)),
+                Btn('Thử lại', kind: BtnKind.primary, onPressed: run),
+              ]),
             ),
           ),
         ),
@@ -179,15 +165,7 @@ class _BootState extends State<Boot> {
     }
     return ValueListenableBuilder<bool>(
       valueListenable: authed,
-      builder:
-          (context, ok, _) =>
-              !ok
-                  ? const LoginScreen()
-                  // nhà thầu: giao diện riêng (dự án + nhật ký thi công); CTV: hồ sơ nghiệm thu
-                  : ValueListenableBuilder<Json?>(
-                    valueListenable: me,
-                    builder: (context, u, _) => u?['role'] == 'nhathau' ? const NtShell() : const HomeShell(),
-                  ),
+      builder: (context, ok, _) => ok ? const HomeShell() : const LoginScreen(),
     );
   }
 }

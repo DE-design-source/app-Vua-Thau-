@@ -95,8 +95,6 @@ Future<void> start() async {
   }
   cfg = Cfg.fromJson(await api('/config'));
   _token = t;
-  // mở lại app: biết vai trò trước khi dựng màn (CTV / nhà thầu có giao diện khác nhau)
-  if (t != null) await loadMe();
   authed.value = t != null;
 }
 
