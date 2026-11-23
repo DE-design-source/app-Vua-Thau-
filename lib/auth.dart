@@ -55,7 +55,7 @@ class _Grid extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
-/// Sau đăng nhập / đăng ký (AuthResult {user, access_token}): app chỉ dành cho CTV, admin và kế toán dùng web.
+/// Sau đăng nhập / đăng ký (AuthResult {user, access_token}): app dành cho CTV và nhà thầu, admin và kế toán dùng web.
 Future<void> signedIn(Json j) async {
   final token = j['access_token'];
   final user = j['user'] is Map ? (j['user'] as Map).cast<String, dynamic>() : null;
@@ -63,8 +63,8 @@ Future<void> signedIn(Json j) async {
     toast('Chưa đăng nhập được, thử lại nhé.');
     return;
   }
-  if (user['role'] != 'ctv') {
-    toast('App dành cho cộng tác viên. Admin và kế toán dùng web quản lý.');
+  if (user['role'] != 'ctv' && user['role'] != 'nhathau') {
+    toast('App dành cho cộng tác viên và nhà thầu. Admin và kế toán dùng web quản lý.');
     return; // không giữ phiên admin, kế toán
   }
   pendingGoogle = null;

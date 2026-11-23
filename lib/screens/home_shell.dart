@@ -116,7 +116,7 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
               height: 68,
               child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 Expanded(
-                  child: _NavItem(
+                  child: NavItem(
                     label: 'Hồ sơ',
                     icon: Icons.home_outlined,
                     iconOn: Icons.home,
@@ -125,9 +125,9 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
                     onTap: () => _go(tabHouses),
                   ),
                 ),
-                Expanded(child: _ShootItem(on: false, onTap: () => openCamera(context))),
+                Expanded(child: ShootItem(on: false, onTap: () => openCamera(context))),
                 Expanded(
-                  child: _NavItem(
+                  child: NavItem(
                     label: 'Bản đồ',
                     icon: Icons.map_outlined,
                     iconOn: Icons.map,
@@ -144,8 +144,8 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
   }
 }
 
-class _NavItem extends StatelessWidget {
-  const _NavItem({required this.label, required this.icon, required this.iconOn, required this.on, required this.onTap, this.badge = 0});
+class NavItem extends StatelessWidget {
+  const NavItem({required this.label, required this.icon, required this.iconOn, required this.on, required this.onTap, this.badge = 0});
   final String label;
   final IconData icon, iconOn;
   final bool on;
@@ -178,8 +178,8 @@ class _NavItem extends StatelessWidget {
 }
 
 /// Nút giữa: tròn vàng nổi lên khỏi thanh tab.
-class _ShootItem extends StatelessWidget {
-  const _ShootItem({required this.on, required this.onTap});
+class ShootItem extends StatelessWidget {
+  const ShootItem({required this.on, required this.onTap});
   final bool on;
   final VoidCallback onTap;
   @override
