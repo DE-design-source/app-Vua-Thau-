@@ -15,6 +15,7 @@ import '../stamp.dart' show p2;
 import '../toast.dart';
 import '../ui.dart';
 import 'camera.dart';
+import 'guest.dart' show GuestProject;
 import 'nt_form.dart';
 import 'nt_report.dart';
 import 'home_shell.dart' show NavItem, ShootItem;
@@ -258,6 +259,7 @@ class _NtHomeState extends State<NtHome> with PageData {
     final user = (j?['user'] as Map?)?.cast<String, dynamic>() ?? const {};
     final stats = (j?['stats'] as Map?)?.cast<String, dynamic>() ?? const {};
     final projects = ((j?['projects'] as List?) ?? const []).cast<Json>();
+    final sites = ((j?['sites'] as List?) ?? const []).cast<Json>();
     final company = str(prof['company']).isNotEmpty ? str(prof['company']) : str(user['name']);
     return RefreshIndicator(
       onRefresh: load,
@@ -395,7 +397,7 @@ class _NtHomeState extends State<NtHome> with PageData {
                           decoration: BoxDecoration(color: const Color(0xFFF7F9FC), borderRadius: BorderRadius.circular(12)),
                           child: Row(
                             children: [
-                              Expanded(child: _stat('${stats['projects'] ?? 0}', 'Dự án')),
+                              Expanded(child: _stat('${asInt(stats['projects']) + asInt(stats['sites'])}', 'Dự án')),
                               Container(width: 1, height: 28, color: const Color(0xFFE3E8F0)),
                               Expanded(child: _stat('${stats['logs'] ?? 0}', 'Nhật ký')),
                               Container(width: 1, height: 28, color: const Color(0xFFE3E8F0)),
@@ -449,12 +451,20 @@ class _NtHomeState extends State<NtHome> with PageData {
                     ],
                   ),
                   if (j == null) Loading(err: err, retry: load),
-                  if (j != null && projects.isEmpty)
+                  if (j != null && projects.isEmpty && sites.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Text('Chưa có dự án. Bấm "Đăng tải dự án" để tạo, rồi chụp nhật ký hằng ngày.', style: T.muted),
+                      child: Text('Chưa có dự án. Bấm "Đăng dự án" để tạo, rồi chụp nhật ký hằng ngày.', style: T.muted),
                     ),
                   for (final p in projects.take(6)) Padding(padding: const EdgeInsets.only(top: 10), child: _ProjectRow(p: p, onChanged: widget.onChanged)),
+                  // công trình CTV đã chụp có bảng hiệu ghi SĐT của nhà thầu (đồng bộ theo SĐT tài khoản)
+                  if (sites.isNotEmpty) ...[
+                    const SizedBox(height: 22),
+                    const Text('Công trình Vua Thầu ghi nhận', style: TextStyle(color: _ink, fontSize: 16, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    const Text('CTV Vua Thầu đã chụp, bảng hiệu ghi số điện thoại của bạn.', style: TextStyle(color: _slate, fontSize: 12)),
+                    for (final s in sites) Padding(padding: const EdgeInsets.only(top: 10), child: NtSiteRow(s: s)),
+                  ],
                 ],
               ),
             ),
@@ -542,6 +552,60 @@ Widget _cover(Json p, {double size = 64, double radius = 10}) {
   );
 }
 
+/// 1 công trình Vua Thầu ghi nhận (CTV chụp, bảng hiệu có SĐT nhà thầu): ảnh bìa công khai, địa chỉ, giai đoạn, ngày chụp.
+class NtSiteRow extends StatelessWidget {
+  const NtSiteRow({super.key, required this.s});
+  final Json s;
+  @override
+  Widget build(BuildContext context) {
+    final cover = str(s['cover_url']);
+    final t = DateTime.tryParse(str(s['at']))?.toLocal();
+    final addr = str(s['address']);
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => push(context, GuestProject(id: asInt(s['id']), signedIn: true)),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Row(
+            spacing: 12,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: cover.isNotEmpty
+                    ? Image.network('$host$cover', width: 64, height: 64, fit: BoxFit.cover, errorBuilder: (_, _, _) => Container(width: 64, height: 64, color: const Color(0xFFE3E8F0)))
+                    : Container(width: 64, height: 64, color: const Color(0xFFE3E8F0), child: const Icon(Icons.apartment, color: _slate)),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: 2,
+                  children: [
+                    Text(addr.isNotEmpty ? addr : 'Công trình', maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _ink, fontSize: 14, fontWeight: FontWeight.w800)),
+                    Text(
+                      [str(s['stage']), str(s['province_name']), if (t != null) 'chụp ${p2(t.day)}/${p2(t.month)}', '${s['photos'] ?? 0} ảnh']
+                          .where((x) => x.isNotEmpty)
+                          .join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: _slate, fontSize: 12),
+                    ),
+                    const SizedBox(height: 3),
+                    _pill('Vua Thầu ghi nhận', _chip, _blue),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: _slate),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProjectRow extends StatelessWidget {
   const _ProjectRow({required this.p, required this.onChanged});
   final Json p;
@@ -606,10 +670,29 @@ class _NtProjectsState extends State<NtProjects> with PageData {
   String get path => '/nt/projects${status.isEmpty ? '' : '?status=$status'}';
   @override
   bool get watchRoute => false;
+  List<Json> sites = []; // công trình Vua Thầu ghi nhận theo SĐT (hiện ở "Tất cả")
+
+  @override
+  void onData(Json j) {
+    api('/nt/sites').then((s) {
+      if (mounted) setState(() => sites = ((s['rows'] as List?) ?? const []).cast<Json>());
+    }).catchError((Object _) {/* không có: chỉ hiện dự án tự đăng */});
+  }
+
+  Widget _sitesSection() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          const Text('Công trình Vua Thầu ghi nhận', style: TextStyle(color: _ink, fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 2),
+          const Text('CTV Vua Thầu đã chụp, bảng hiệu ghi số điện thoại của bạn.', style: TextStyle(color: _slate, fontSize: 12)),
+          for (final s in sites) Padding(padding: const EdgeInsets.only(top: 10), child: NtSiteRow(s: s)),
+        ]),
+      );
 
   @override
   Widget build(BuildContext context) {
     final rows = ((d?['rows'] as List?) ?? const []).cast<Json>();
+    final showSites = status.isEmpty && sites.isNotEmpty;
     return Column(
       children: [
         Container(
@@ -650,6 +733,27 @@ class _NtProjectsState extends State<NtProjects> with PageData {
             child:
                 d == null
                     ? ListView(children: [Loading(err: err, retry: load)])
+                    : rows.isEmpty && showSites
+                    ? ListView(children: [_sitesSection()])
+                    : rows.isNotEmpty && showSites
+                    ? ListView(
+                      children: [
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 14,
+                            crossAxisSpacing: 12,
+                            childAspectRatio: .74,
+                          ),
+                          itemCount: rows.length,
+                          itemBuilder: (context, i) => _ProjectCard(p: rows[i], onChanged: widget.onChanged),
+                        ),
+                        _sitesSection(),
+                      ],
+                    )
                     : rows.isEmpty
                     ? ListView(
                       children: [

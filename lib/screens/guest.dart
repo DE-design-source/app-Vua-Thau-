@@ -322,8 +322,10 @@ Widget _chip(String s, Color bg, Color fg) => Container(
 // ---------------------------------------------------------------- chi tiết công trình
 
 class GuestProject extends StatefulWidget {
-  const GuestProject({super.key, required this.id});
+  /// signedIn: nhà thầu đã đăng nhập mở công trình Vua Thầu ghi nhận: không hiện ô mời đăng nhập.
+  const GuestProject({super.key, required this.id, this.signedIn = false});
   final int id;
+  final bool signedIn;
   @override
   State<GuestProject> createState() => _GuestProjectState();
 }
@@ -400,6 +402,7 @@ class _GuestProjectState extends State<GuestProject> with PageData {
                   launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query=${p['lat']},${p['lng']}'), mode: LaunchMode.externalApplication);
                 }),
               const SizedBox(height: 10),
+              if (!widget.signedIn)
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(color: C.amberBg, borderRadius: BorderRadius.circular(12)),
