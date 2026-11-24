@@ -63,6 +63,10 @@ int? houseIdOf(Json j) {
   return id != null && id > 0 ? id : null;
 }
 
+// nhà thầu: hạng mục chọn nhanh ở màn Xác nhận nhật ký (thiết kế "Xác nhận & tải lên")
+const _ntCats = ['Cốp pha', 'Cốt thép', 'Đổ bê tông', 'Xây tô'];
+const _ntWeek = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật']; // DateTime.weekday: 1 = thứ Hai
+
 class _Shot {
   _Shot(this.path, this.meta);
   final String path;
@@ -73,8 +77,12 @@ bool _far(Pos? a, Pos b) => a == null || math.sqrt(math.pow(a.lat - b.lat, 2) + 
 
 class CameraScreen extends StatefulWidget {
   /// hid = 0: hồ sơ mới. have: số ảnh hồ sơ đã có.
-  const CameraScreen({super.key, this.hid = 0, this.have = 0});
-  final int hid, have;
+  /// ntProject > 0: nhà thầu chụp nhật ký thi công cho dự án này (không AI kiểm ảnh, không tiền;
+  /// Xong -> màn Xác nhận nhật ký: công trình + khớp GPS, hạng mục hôm nay, ghi chú -> tải lên). ntLat/ntLng: vị trí dự án nếu có.
+  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng});
+  final int hid, have, ntProject;
+  final String ntName;
+  final double? ntLat, ntLng;
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
@@ -94,6 +102,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   bool _zoomBusy = false;
   double? _zoomNext;
   final clips = <_Clip>[]; // video vừa quay, chưa tải lên
+  final ntNote = TextEditingController(), ntNoteFocus = FocusNode(); // nhà thầu: ghi chú nhật ký
+  final ntCats = <String>{}; // nhà thầu: hạng mục hôm nay
   bool videoMode = false, recording = false;
   DateTime? recAt;
   Timer? recTimer;
@@ -135,6 +145,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     cam?.dispose();
     checks.removeListener(_tick);
     checks.dispose();
+    ntNote.dispose();
+    ntNoteFocus.dispose();
     super.dispose();
   }
 
@@ -494,7 +506,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       });
       if (firstSign)
         toast('Đã lưu nhà thầu từ bảng hiệu: ${[if (seenName.isNotEmpty) seenName, if (seenPhone.isNotEmpty) prettyPhone(seenPhone)].join(' · ')}');
-      checks.run(path, meta: meta);
+      if (widget.ntProject == 0) checks.run(path, meta: meta); // nhật ký nhà thầu: không AI kiểm ảnh
     } catch (e) {
       toast('In giờ, vị trí lên ảnh không được: $e');
     } finally {
@@ -517,9 +529,61 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     });
   }
 
+  /// Nhà thầu: tải 1 lần nhật ký (mô tả + ảnh + video) lên dự án.
+  Future<void> _sendNt() async {
+    if (shots.isEmpty && clips.isEmpty) {
+      setState(() => err = 'Chụp ít nhất 1 ảnh hoặc quay 1 video cho nhật ký hôm nay.');
+      return;
+    }
+    // mô tả nhật ký = hạng mục đã chọn + ghi chú, vd "Cốp pha, Cốt thép. Lắp cốp pha cột tầng 2"
+    final note = [if (ntCats.isNotEmpty) [for (final c in _ntCats) if (ntCats.contains(c)) c].join(', '), ntNote.text.trim()]
+        .where((s) => s.isNotEmpty)
+        .join('. ');
+    if (!mounted) return;
+    final meta = shots.isNotEmpty ? shots.first.meta : const <String, Object>{};
+    setState(() {
+      err = '';
+      pct = 0;
+      upWhat = 'Đang tải nhật ký…';
+    });
+    try {
+      final j = await upload(
+        '/nt/projects/${widget.ntProject}/logs',
+        [
+          for (var k = 0; k < shots.length; k++) UpFile('files', shots[k].path, 'nhat-ky-${k + 1}.jpg'),
+          for (final v in clips) UpFile('files', v.path, v.name, videoMime(v.name)),
+        ],
+        fields: {'note': note, 'meta': jsonEncode({'t': meta['t'] ?? '', 'lat': meta['lat'], 'lng': meta['lng'], 'addr': meta['addr'] ?? ''})},
+        onProgress: (p) {
+          if (mounted) setState(() => pct = p);
+        },
+      );
+      toast(msgsOf(j).isNotEmpty ? msgsOf(j) : '${j['message'] ?? 'Đã lưu nhật ký.'}');
+      for (final s in shots) {
+        deleteLocal(s.path);
+      }
+      for (final v in clips) {
+        deleteLocal(v.path);
+      }
+      shots.clear();
+      clips.clear();
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) setState(() => err = '${errMsg(e)} Ảnh, video vẫn còn đây, bấm Tải lên để thử lại.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          pct = null;
+          upWhat = '';
+        });
+      }
+    }
+  }
+
   Future<void> send() async {
     if (recording) await _stopRec();
     await _stamps;
+    if (widget.ntProject > 0) return _sendNt();
     final target = widget.hid > 0 ? widget.hid : doneHid;
     if (shots.isEmpty && target == null) {
       setState(() => err = 'Chụp ít nhất 1 ảnh để tạo hồ sơ, rồi mới tải video lên.');
@@ -686,6 +750,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             ? (gpsErr.isNotEmpty
                 ? 'Ảnh nghiệm thu bắt buộc có vị trí. Bật quyền Vị trí cho app trong cài đặt máy.'
                 : 'Đang chờ GPS để chụp. Ảnh nghiệm thu bắt buộc có vị trí.')
+            : widget.ntProject > 0
+            ? (shots.isEmpty && clips.isEmpty
+                ? 'Nhật ký ${widget.ntName}: chụp ảnh / quay video việc làm hôm nay.'
+                : 'Bấm Xong, ghi việc đã làm (vd: đổ bê tông sàn tầng 2) rồi tải lên.')
             : shots.length + stamping >= left
             ? 'Đã đủ số ảnh tối đa của hồ sơ. Bấm Xong để tải lên.'
             : n < min
@@ -857,7 +925,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             child: Column(
               spacing: 10,
               children: [
-                Segs(n: n, total: goal, dark: true),
+                if (widget.ntProject == 0) Segs(n: n, total: goal, dark: true),
                 if (last != null)
                   Semantics(
                     liveRegion: true,
@@ -1183,9 +1251,72 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     ),
   );
 
+  /// Nhà thầu: khoảng cách (m) từ chỗ chụp tới vị trí dự án; null nếu thiếu toạ độ.
+  double? _ntDist() {
+    final la = widget.ntLat, ln = widget.ntLng;
+    if (la == null || ln == null) return null;
+    final m = shots.isNotEmpty ? shots.first.meta : const <String, Object>{};
+    final lat = m['lat'] is num ? (m['lat'] as num).toDouble() : pos?.lat;
+    final lng = m['lng'] is num ? (m['lng'] as num).toDouble() : pos?.lng;
+    if (lat == null || lng == null) return null;
+    return math.sqrt(math.pow(lat - la, 2) + math.pow((lng - ln) * math.cos(la * math.pi / 180), 2)) * 111320;
+  }
+
+  /// Nhà thầu (thiết kế "Xác nhận & tải lên"): công trình + khớp GPS, hạng mục hôm nay, ghi chú.
+  List<Widget> _ntConfirm() {
+    final d = _ntDist();
+    final near = d != null && d <= 200;
+    Widget cap(String s) => Padding(
+          padding: const EdgeInsets.only(top: 18, bottom: 8),
+          child: Text(s, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: C.muted, letterSpacing: 0.6)),
+        );
+    return [
+      cap('CÔNG TRÌNH'),
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.ctl), border: Border.all(color: C.line)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
+          Text(widget.ntName.isNotEmpty ? widget.ntName : 'Dự án', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.text)),
+          if (d != null)
+            Row(spacing: 6, children: [
+              Ic(near ? 'check' : 'pin', size: 16, color: near ? C.ok : C.bad),
+              Expanded(
+                child: Text(
+                  near ? 'Khớp vị trí GPS · cách ${d.round()}m' : 'Cách công trình ${d < 1000 ? '${d.round()}m' : '${(d / 1000).toStringAsFixed(1)}km'}, kiểm tra lại đúng dự án chưa',
+                  style: TextStyle(fontSize: 13.5, color: near ? C.ok : C.bad, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ]),
+        ]),
+      ),
+      cap('HẠNG MỤC HÔM NAY'),
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        for (final c in _ntCats)
+          FilterChip(
+            label: Text(c),
+            selected: ntCats.contains(c),
+            onSelected: pct == null ? (on) => setState(() => on ? ntCats.add(c) : ntCats.remove(c)) : null,
+          ),
+        ActionChip(avatar: const Icon(Icons.add, size: 18), label: const Text('Khác'), onPressed: pct == null ? () => ntNoteFocus.requestFocus() : null),
+      ]),
+      cap('GHI CHÚ (KHÔNG BẮT BUỘC)'),
+      TextField(
+        controller: ntNote,
+        focusNode: ntNoteFocus,
+        enabled: pct == null,
+        maxLines: 3,
+        maxLength: 300,
+        textCapitalization: TextCapitalization.sentences,
+        decoration: const InputDecoration(hintText: 'Vd: Lắp cốp pha cột tầng 2', filled: true, fillColor: Colors.white, border: OutlineInputBorder()),
+      ),
+    ];
+  }
+
   Widget _review() {
     final sum = checks.tally(shots.map((s) => s.path).toList());
     final total = widget.have + shots.length;
+    final nt = widget.ntProject > 0;
+    final t = DateTime.now();
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
       child: Container(
@@ -1204,9 +1335,20 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                       spacing: 4,
                       children: [
                         Text(
-                          clips.isEmpty ? '${shots.length} ảnh vừa chụp' : '${shots.length} ảnh · ${clips.length} video',
+                          nt
+                              ? 'Xác nhận nhật ký'
+                              : clips.isEmpty
+                                  ? '${shots.length} ảnh vừa chụp'
+                                  : '${shots.length} ảnh · ${clips.length} video',
                           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: C.text, letterSpacing: -0.3),
                         ),
+                        if (nt)
+                          Text(
+                            '${_ntWeek[t.weekday - 1]}, ${p2(t.day)}/${p2(t.month)}/${t.year} · ${p2(t.hour)}:${p2(t.minute)}'
+                            '${pos != null ? ' · GPS ±${pos!.acc.round()}m' : ''}',
+                            style: T.muted.copyWith(fontSize: 14),
+                          )
+                        else
                         Text(
                           total >= cfg.minPhotos
                               ? 'Hồ sơ $total ảnh · dự kiến ${money(cfg.payFor(total))}'
@@ -1285,6 +1427,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                       ),
                     if (videoTip().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 6), child: Text(videoTip(), style: T.muted)),
                   ],
+                  if (nt) ..._ntConfirm(),
                 ],
               ),
             ),
@@ -1297,7 +1440,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 children: [
                   if (upWhat.isNotEmpty) Text(upWhat, style: T.muted),
                   if (pct != null) Progress(pct: pct!, doneText: upWhat.isNotEmpty ? 'Đã tải xong video.' : 'Đã tải xong. Đang kiểm tra ảnh…'),
-                  if (ctName.isNotEmpty || ctPhone.isNotEmpty)
+                  if (!nt && (ctName.isNotEmpty || ctPhone.isNotEmpty))
                     Row(
                       spacing: 8,
                       children: [
