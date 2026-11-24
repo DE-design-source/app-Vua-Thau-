@@ -27,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   late String role = widget.role == roleCtv || widget.role == roleNt ? widget.role : '';
   String busy = '', err = '', switchTo = '';
   bool ntNew = false; // SĐT chưa có tài khoản nhà thầu: hiện nút Đăng ký nhà thầu
+  bool ntPending = false; // đã đăng ký form nhà thầu, Vua Thầu chưa xác minh
 
   @override
   void initState() {
@@ -79,7 +80,12 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       if (role == roleNt) {
-        if (mounted) setState(() => ntNew = true);
+        if (mounted) {
+          setState(() {
+            ntNew = true;
+            ntPending = j['nt_pending'] == true;
+          });
+        }
         return;
       }
       // CTV mới: sang đăng ký, điền sẵn SĐT
@@ -192,9 +198,14 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(color: C.amberBg, borderRadius: BorderRadius.circular(12)),
                         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 8, children: [
-                          const Text('Số này chưa có tài khoản nhà thầu.', style: TextStyle(fontWeight: FontWeight.w700, color: C.text)),
-                          const Text('Đăng ký nhà thầu, Vua Thầu xác minh rồi cấp tài khoản theo số điện thoại này.', style: T.muted),
-                          if (cfg.ntForm.isNotEmpty)
+                          Text(ntPending ? 'Vua Thầu đang xác minh hồ sơ nhà thầu của bạn.' : 'Số này chưa có tài khoản nhà thầu.',
+                              style: const TextStyle(fontWeight: FontWeight.w700, color: C.text)),
+                          Text(
+                              ntPending
+                                  ? 'Đã nhận đăng ký của số này. Xác minh xong, tài khoản tự có, bạn nhập lại số này để vào.'
+                                  : 'Đăng ký nhà thầu, Vua Thầu xác minh xong là tài khoản tự có theo số điện thoại này.',
+                              style: T.muted),
+                          if (cfg.ntForm.isNotEmpty && !ntPending)
                             Btn('Đăng ký nhà thầu', icon: 'right', onPressed: () => launchUrl(Uri.parse(cfg.ntForm), mode: LaunchMode.externalApplication)),
                         ]),
                       ),
