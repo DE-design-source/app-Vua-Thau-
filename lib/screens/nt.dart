@@ -3,6 +3,7 @@
 //   Dự án (hồ sơ năng lực): lọc Tất cả / Đang thi công / Hoàn thành; Chi tiết: tiến độ, nhật ký thi công có giờ + GPS
 //   Chụp ảnh: camera Vua Thầu (in giờ, địa chỉ, GPS) -> mô tả việc đã làm -> tải lên dự án
 //   Bản đồ: các dự án của mình. (Khám phá, logo trên ảnh, chia sẻ hồ sơ: đợt sau.)
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -45,7 +46,7 @@ int _daysOf(Json p) {
   final start = _day(p['started_on']);
   if (start == null) return 1;
   final end = _day(p['finished_on']) ?? DateTime.now();
-  return DateTime(end.year, end.month, end.day).difference(start).inDays + 1;
+  return math.max(1, DateTime(end.year, end.month, end.day).difference(start).inDays + 1); // dữ liệu cũ: bắt đầu sau hoàn thành
 }
 
 /// "Cập nhật hôm nay / hôm qua / N ngày trước" (xanh) hoặc "Chưa cập nhật hôm nay" (cam)
