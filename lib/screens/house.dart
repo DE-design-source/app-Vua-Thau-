@@ -12,6 +12,7 @@ import '../toast.dart';
 import '../ui.dart';
 import '../video.dart';
 import 'camera.dart';
+import 'report.dart';
 
 const _form = ['address', 'floors', 'stage', 'contractor_name', 'contractor_phone'];
 
@@ -216,6 +217,7 @@ class _HouseScreenState extends State<HouseScreen> with PageData {
                   Btn('Chụp thêm bằng camera',
                       icon: 'camera', kind: BtnKind.dark, onPressed: () => push(context, CameraScreen(hid: widget.id, have: ps.length))),
                 ],
+                if (ps.isNotEmpty) Btn('Gửi cập nhật cho chủ nhà qua Zalo', icon: 'chat', onPressed: () => push(context, ReportScreen(id: widget.id))),
 
                 // ---- Video công trình (không qua AI; có video được cộng thưởng cfg.videoBonus) ----
                 if (editable || vs.isNotEmpty) VideoSection(hid: widget.id, videos: vs, editable: editable, onChanged: load),
