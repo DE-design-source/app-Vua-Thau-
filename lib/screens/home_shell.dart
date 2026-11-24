@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../api.dart';
 import '../page.dart';
 import '../ui.dart';
+import '../rating.dart';
 import 'account.dart';
 import 'houses.dart';
 import 'income.dart';
@@ -55,6 +56,9 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
     warmCamera(); // bấm Chụp hình là camera lên ngay
     opened.add(tabIndex.value);
     tabIndex.addListener(_changed);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) checkAndShowRating(context); // đánh giá app (đủ 30 ảnh)
+    });
   }
 
   @override
@@ -88,7 +92,10 @@ class _HomeShellState extends State<HomeShell> with RouteAware {
 
   // Quay về từ 1 hồ sơ, camera, Thu nhập...: tải lại tab đang mở
   @override
-  void didPopNext() => _reload();
+  void didPopNext() {
+    _reload();
+    showRatingIfDue(context); // vừa tải ảnh lên đủ 30 ảnh: hỏi đánh giá app
+  }
 
   void _go(int k) => tabIndex.value == k ? _reload() : tabIndex.value = k;
 

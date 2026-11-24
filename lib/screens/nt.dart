@@ -22,6 +22,7 @@ import '../page.dart';
 import '../stamp.dart' show StampData, p2;
 import '../toast.dart';
 import '../ui.dart';
+import '../rating.dart';
 import 'camera.dart';
 import 'guest.dart' show GuestProject;
 import 'nt_form.dart';
@@ -147,6 +148,9 @@ class _NtShellState extends State<NtShell> {
   Future<void> shoot() async {
     final done = await captureToday(context, bottomBar: navBar(camera: true));
     if (done == true) reloadAll();
+    // đóng camera về Trang chủ: đủ 30 ảnh thì hỏi đánh giá app (mở app là vào camera nên hỏi ở đây)
+    if (mounted) await checkRating();
+    if (mounted) showRatingIfDue(context);
   }
 
   @override

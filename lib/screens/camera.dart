@@ -25,6 +25,7 @@ import '../stamp.dart';
 import '../toast.dart';
 import '../ui.dart';
 import '../video.dart' show maxVideos, mb, videoLimit, videoMime;
+import '../rating.dart';
 import 'house.dart';
 import 'nt_report.dart';
 import 'report.dart';
@@ -671,6 +672,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       );
       final skipped = ((j['skipped'] as List?) ?? const []).map((e) => '$e').toList();
       if (skipped.isNotEmpty) toast('Bỏ qua: ${skipped.join('; ')}');
+      checkRating(); // đủ 30 ảnh: hỏi đánh giá app khi về màn chính
       for (final s in shots) {
         deleteLocal(s.path);
       }
@@ -723,6 +725,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         id = await _sendPhotos();
         if (id == null) return;
         doneHid = id;
+        checkRating(); // đủ 30 ảnh: hỏi đánh giá app khi về màn chính
       }
       // video: từng cái một (file lớn), lỗi thì giữ lại để thử lại
       for (var k = 0; clips.isNotEmpty; k++) {
