@@ -183,7 +183,7 @@ class _NtShellState extends State<NtShell> {
               children: [
                 Expanded(child: NavItem(label: 'Trang chủ', icon: Icons.home_outlined, iconOn: Icons.home, on: !camera && tab == 0, onTap: () => go(() => _go(0)))),
                 Expanded(child: NavItem(label: 'Dự án', icon: Icons.work_outline, iconOn: Icons.work, on: !camera && tab == 1, onTap: () => go(() => _go(1)))),
-                Expanded(child: ShootItem(on: camera, onTap: camera ? () {} : shoot)),
+                Expanded(child: ShootItem(on: camera, shutter: camera, onTap: shoot)),
                 Expanded(child: NavItem(label: 'Khám phá', icon: Icons.explore_outlined, iconOn: Icons.explore, on: !camera && tab == 2, onTap: () => go(() => _go(2)))),
                 Expanded(
                   child: NavItem(

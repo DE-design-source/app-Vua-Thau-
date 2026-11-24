@@ -179,40 +179,57 @@ class NavItem extends StatelessWidget {
 
 /// Nút giữa: tròn vàng nổi lên khỏi thanh tab.
 class ShootItem extends StatelessWidget {
-  const ShootItem({required this.on, required this.onTap});
-  final bool on;
+  /// shutter: true -> đang ở màn chụp, nút này là nút chụp / quay của camera (đọc camShutter), bỏ qua onTap.
+  const ShootItem({required this.on, required this.onTap, this.shutter = false});
+  final bool on, shutter;
   final VoidCallback onTap;
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        selected: on,
-        label: 'Chụp hình',
-        excludeSemantics: true,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onTap,
-          // Nút tròn nhô lên trên mép thanh tab (không làm thanh cao thêm)
-          child: Stack(clipBehavior: Clip.none, alignment: Alignment.topCenter, children: [
-            Positioned(
-              top: -24,
-              child: Container(
+  Widget build(BuildContext context) => shutter
+      ? ValueListenableBuilder<CamShutter?>(valueListenable: camShutter, builder: (_, s, _) => _item(s))
+      : _item(null);
+
+  Widget _item(CamShutter? s) {
+    final video = s?.video ?? false, rec = s?.recording ?? false;
+    final label = !shutter ? 'Chụp hình' : (rec ? 'Dừng quay' : (video ? 'Quay video' : 'Chụp hình'));
+    return Semantics(
+      button: true,
+      selected: on,
+      enabled: !shutter || (s?.enabled ?? false),
+      label: label,
+      excludeSemantics: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: shutter ? s?.onTap : onTap,
+        // Nút tròn nhô lên trên mép thanh tab (không làm thanh cao thêm)
+        child: Stack(clipBehavior: Clip.none, alignment: Alignment.topCenter, children: [
+          Positioned(
+            top: -24,
+            child: Opacity(
+              opacity: shutter && !(s?.enabled ?? false) ? .5 : 1,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
                 width: 70,
                 height: 70,
                 decoration: BoxDecoration(
-                  color: C.amber,
+                  color: video ? const Color(0xFFE5322D) : C.amber,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 3),
                   boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2))],
                 ),
-                child: const Icon(Icons.photo_camera, color: C.navy, size: 33),
+                child: Icon(
+                  rec ? Icons.stop_rounded : (video ? Icons.videocam : Icons.photo_camera),
+                  color: video ? Colors.white : C.navy,
+                  size: rec ? 38 : 33,
+                ),
               ),
             ),
-            Positioned(
-              bottom: 6,
-              child: Text('Chụp hình',
-                  style: TextStyle(color: C.navy, fontWeight: on ? FontWeight.w700 : FontWeight.w600, fontSize: 12)),
-            ),
-          ]),
-        ),
-      );
+          ),
+          Positioned(
+            bottom: 6,
+            child: Text(label, style: TextStyle(color: C.navy, fontWeight: on ? FontWeight.w700 : FontWeight.w600, fontSize: 12)),
+          ),
+        ]),
+      ),
+    );
+  }
 }

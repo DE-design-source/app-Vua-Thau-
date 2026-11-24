@@ -76,6 +76,22 @@ class _Shot {
   final Map<String, Object> meta;
 }
 
+/// Màn chụp có thanh tab (máy dọc): nút "Chụp hình" giữa thanh tab là nút chụp / quay, camera không vẽ nút chụp riêng
+/// (góp ý 24/11/2026: dư 1 nút chụp ảnh). Camera đang mở ghi trạng thái vào đây, thanh tab đọc để vẽ và bấm.
+@immutable
+class CamShutter {
+  const CamShutter({required this.onTap, required this.enabled, required this.video, required this.recording});
+  final VoidCallback onTap;
+  final bool enabled, video, recording;
+  @override
+  bool operator ==(Object other) =>
+      other is CamShutter && other.onTap == onTap && other.enabled == enabled && other.video == video && other.recording == recording;
+  @override
+  int get hashCode => Object.hash(onTap, enabled, video, recording);
+}
+
+final camShutter = ValueNotifier<CamShutter?>(null);
+
 bool _far(Pos? a, Pos b) => a == null || math.sqrt(math.pow(a.lat - b.lat, 2) + math.pow((a.lng - b.lng) * math.cos(b.lat * math.pi / 180), 2)) * 111320 > 25;
 
 class CameraScreen extends StatefulWidget {
@@ -181,8 +197,32 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   void _tick() => setState(() {});
 
+  // nút chụp trên thanh tab (xem CamShutter)
+  void _navTap() {
+    if (videoMode) {
+      if (recording || canRecord) toggleRec();
+    } else if (canShoot) {
+      shoot();
+    }
+  }
+
+  void _syncShutter(bool navShutter) {
+    final v = navShutter
+        ? CamShutter(onTap: _navTap, enabled: videoMode ? recording || canRecord : canShoot, video: videoMode, recording: recording)
+        : null;
+    if (camShutter.value == v) return;
+    // không đổi notifier giữa lúc build (thanh tab cũng đang build)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) camShutter.value = v;
+    });
+  }
+
   @override
   void dispose() {
+    final tap = _navTap;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (camShutter.value?.onTap == tap) camShutter.value = null;
+    });
     WidgetsBinding.instance.removeObserver(this);
     widget.ntStyle?.removeListener(_tick);
     clock?.cancel();
@@ -202,7 +242,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   @override
   void didChangeAppLifecycleState(AppLifecycleState s) {
     final c = cam;
-    if (s == AppLifecycleState.inactive || s == AppLifecycleState.paused) {
+    // Bản web: trang mất focus (hộp hỏi quyền camera của Safari, kéo thanh thông báo...) cũng báo "inactive"; đóng camera lúc đó
+    // thì quay lại lại phải xin quyền -> iPhone hỏi "Allow camera" liên tục (góp ý 25/11/2026). Web chỉ đóng khi trang ẩn hẳn.
+    final off = kIsWeb ? s == AppLifecycleState.hidden || s == AppLifecycleState.paused : s == AppLifecycleState.inactive || s == AppLifecycleState.paused;
+    if (off) {
       if (c != null) {
         // đang quay thì lưu đoạn đã quay trước khi đóng camera
         final stop = recording ? _stopRec() : Future<void>.value();
@@ -936,6 +979,36 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       ],
     );
 
+    // có thanh tab: nút "Chụp hình" của thanh tab là nút chụp, giữa hàng dưới khung ngắm chỉ còn công tắc Ảnh / Video
+    final navShut = widget.bottomBar != null && !review && MediaQuery.orientationOf(context) == Orientation.portrait;
+    _syncShutter(navShut);
+    final modePill = Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .12), borderRadius: BorderRadius.circular(999)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (v, label) in [(false, 'Ảnh'), (true, 'Video')])
+            Semantics(
+              button: true,
+              selected: videoMode == v,
+              child: GestureDetector(
+                onTap: recording || busy ? null : () => setState(() => videoMode = v),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  decoration: BoxDecoration(color: videoMode == v ? C.amber : Colors.transparent, borderRadius: BorderRadius.circular(999)),
+                  child: Text(
+                    label,
+                    style: TextStyle(color: videoMode == v ? C.amberInk : Colors.white70, fontWeight: FontWeight.w700, fontSize: 13.5),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
     // ---- dưới khung ngắm (màn ngang: cột bên phải): ảnh vừa chụp | nút chụp | Xong, rồi Ảnh / Video ----
     Widget shutterBar(bool v) => Flex(
       direction: v ? Axis.vertical : Axis.horizontal,
@@ -1002,7 +1075,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             ),
           ),
         ),
-        if (videoMode)
+        if (navShut && !v)
+          modePill
+        else if (videoMode)
           Semantics(
             button: true,
             label: recording ? 'Dừng quay' : 'Quay video',
@@ -1122,7 +1197,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         // Màn NGANG (trình duyệt cầm ngang; app Android khoá dọc): khung ngắm ngang cao hết màn bên trái,
         // nút chụp thành cột bên phải. Ảnh chụp trên web cầm ngang cũng ra ngang, nên vẫn thấy gì chụp nấy.
         final land = box.maxWidth > box.maxHeight;
-        const ctlH = 148.0, ctlW = 128.0; // hàng nút chụp + Ảnh / Video (dọc) / cột nút (ngang)
+        // hàng nút chụp + Ảnh / Video (dọc; có thanh tab: 1 hàng, chừa chỗ nút Chụp hình nhô lên) / cột nút (ngang)
+        final ctlH = navShut ? 104.0 : 148.0;
+        const ctlW = 128.0;
         final double fw, fh;
         if (land) {
           final h = math.min(box.maxHeight, (box.maxWidth - ctlW - safe.right) / ar);
@@ -1262,8 +1339,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                 child: ColoredBox(
                   color: Colors.black,
                   child: Padding(
-                    padding: EdgeInsets.fromLTRB(24, 8, 24, 6 + safe.bottom),
-                    child: Column(mainAxisAlignment: MainAxisAlignment.center, spacing: 10, children: [shutterBar(false), modeRow]),
+                    // có thanh tab: chừa 28 dưới cho nút Chụp hình nhô lên từ thanh tab
+                    padding: EdgeInsets.fromLTRB(24, 8, 24, (navShut ? 28 : 6) + safe.bottom),
+                    child: Column(mainAxisAlignment: MainAxisAlignment.center, spacing: 10, children: [shutterBar(false), if (!navShut) modeRow]),
                   ),
                 ),
               ),
