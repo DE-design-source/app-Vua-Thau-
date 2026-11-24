@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api.dart';
@@ -210,6 +212,28 @@ Widget _ntCamera(Json p) =>
 /// Tên công ty (hồ sơ nhà thầu) in trên ảnh nhật ký; cập nhật khi Trang chủ / Tài khoản tải hồ sơ.
 final ntCompany = ValueNotifier<String>('');
 
+/// Hồ sơ công ty (khu vực...) từ Trang chủ: đầu trang Dự án dùng lại.
+final ntProfile = ValueNotifier<Json>({});
+
+/// "Chia sẻ" hồ sơ năng lực: link /nt/<mã> (khách mở xem công ty + các dự án + báo cáo).
+Future<void> sharePortfolio(BuildContext context) async {
+  try {
+    final j = await api('/nt/portfolio');
+    final url = '$host${str(j['path'])}';
+    final text = 'Hồ sơ năng lực ${ntCompany.value.isNotEmpty ? ntCompany.value : 'của chúng tôi'}: các công trình đã và đang thi công, '
+        'ảnh thực tế có giờ chụp + GPS.\n$url';
+    try {
+      final r = await SharePlus.instance.share(ShareParams(text: text, subject: 'Hồ sơ năng lực'));
+      if (r.status == ShareResultStatus.unavailable) throw Exception('unavailable');
+    } catch (_) {
+      await Clipboard.setData(ClipboardData(text: text));
+      toast('Đã chép link hồ sơ năng lực. Dán vào Zalo / Messenger gửi khách.');
+    }
+  } catch (e) {
+    toast(errMsg(e));
+  }
+}
+
 /// Tạo / sửa dự án: form "Đăng tải dự án mới" (nt_form.dart). Trả dự án đã lưu, null nếu đóng.
 Future<Json?> editProject(BuildContext context, Json? p) => editProjectForm(context, p);
 
@@ -233,6 +257,7 @@ class _NtHomeState extends State<NtHome> with PageData {
     final prof = (j['profile'] as Map?) ?? const {};
     final user = (j['user'] as Map?) ?? const {};
     ntCompany.value = str(prof['company']).isNotEmpty ? str(prof['company']) : str(user['name']);
+    ntProfile.value = prof.cast<String, dynamic>();
   }
 
   String _greet() {
@@ -737,19 +762,52 @@ class _NtProjectsState extends State<NtProjects> with PageData {
   Widget build(BuildContext context) {
     final rows = ((d?['rows'] as List?) ?? const []).cast<Json>();
     final showSites = status.isEmpty && sites.isNotEmpty;
+    final prof = ntProfile.value;
+    final company = ntCompany.value;
+    final logs = rows.fold<int>(0, (a, p) => a + asInt(p['logs']));
     return Column(
       children: [
+        // thiết kế "Dự án (Portfolio)": đầu trang + thẻ công ty (số dự án, nhật ký) + Chia sẻ hồ sơ năng lực
         Container(
           width: double.infinity,
-          padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 14, 16, 14),
-          color: _ink,
-          child: const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Dự án', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-              Text('Hồ sơ năng lực của bạn', style: TextStyle(color: Color(0xFFC9D4E5), fontSize: 13)),
-            ],
-          ),
+          padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 14, 8, 14),
+          decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF0B2340), Color(0xFF102C5E), Color(0xFF1B3F94)])),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: [
+            Row(children: [
+              const Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Dự án', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+                  Text('Hồ sơ năng lực của bạn', style: TextStyle(color: Color(0xFFC9D4E5), fontSize: 13)),
+                ]),
+              ),
+              IconButton(tooltip: 'Chia sẻ hồ sơ năng lực', onPressed: () => sharePortfolio(context), icon: const Icon(Icons.ios_share, color: Colors.white)),
+            ]),
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(14)),
+              child: Row(spacing: 10, children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: _ink, borderRadius: BorderRadius.circular(12)),
+                  child: Text(company.isEmpty ? 'NT' : _coInitials(company), style: const TextStyle(color: _gold, fontWeight: FontWeight.w800)),
+                ),
+                Expanded(
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(company.isEmpty ? 'Công ty của bạn' : company,
+                        maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _ink, fontSize: 14, fontWeight: FontWeight.w800)),
+                    Text(['Nhà thầu xây dựng', if (str(prof['regions']).isNotEmpty) str(prof['regions'])].join(' · '),
+                        maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: _slate, fontSize: 11.5)),
+                  ]),
+                ),
+                _stat('${rows.length + sites.length}', 'Dự án'),
+                const SizedBox(width: 4),
+                _stat('$logs', 'Nhật ký'),
+              ]),
+            ),
+          ]),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -923,259 +981,437 @@ class _NtProjectDetailState extends State<NtProjectDetail> with PageData {
     }
   }
 
+  /// Gửi báo cáo cho chủ nhà: nhật ký mới nhất (thiết kế: nút Chia sẻ).
+  void shareLatest(List<Json> logs) {
+    if (logs.isEmpty) {
+      toast('Chưa có nhật ký. Chụp nhật ký hôm nay rồi gửi báo cáo cho khách.');
+      return;
+    }
+    push(context, NtReportScreen(projectId: widget.id, logId: asInt(logs.first['id'])));
+  }
+
+  /// Giữ lâu 1 nhật ký: gửi báo cáo / xoá.
+  void logMenu(Json l) => showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline, color: _blue),
+              title: const Text('Gửi báo cáo cho khách'),
+              onTap: () {
+                Navigator.pop(ctx);
+                push(context, NtReportScreen(projectId: widget.id, logId: asInt(l['id'])));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: C.bad),
+              title: const Text('Xoá nhật ký', style: TextStyle(color: C.bad)),
+              onTap: () {
+                Navigator.pop(ctx);
+                removeLog(l);
+              },
+            ),
+          ]),
+        ),
+      );
+
+  Future<void> more(Json p) async {
+    final done = p['status'] == 'hoan_thanh';
+    final v = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(leading: const Icon(Icons.edit_outlined), title: const Text('Sửa dự án, tiến độ'), onTap: () => Navigator.pop(ctx, 'edit')),
+          ListTile(
+            leading: Icon(done ? Icons.replay : Icons.task_alt),
+            title: Text(done ? 'Chuyển về Đang thi công' : 'Đánh dấu Hoàn thành'),
+            onTap: () => Navigator.pop(ctx, 'status'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline, color: C.bad),
+            title: const Text('Xoá dự án', style: TextStyle(color: C.bad)),
+            onTap: () => Navigator.pop(ctx, 'del'),
+          ),
+        ]),
+      ),
+    );
+    if (!mounted) return;
+    final have = ((d?['photos'] as List?) ?? const []).length;
+    if (v == 'edit' && await editProject(context, {...p, 'photos_project': have}) != null) load();
+    if (v == 'status') setStatus(p);
+    if (v == 'del') remove(p);
+  }
+
+  Widget _round(IconData icon, String tip, VoidCallback onTap) => Material(
+        color: const Color(0x800B2340),
+        shape: const CircleBorder(),
+        child: IconButton(tooltip: tip, onPressed: onTap, icon: Icon(icon, color: Colors.white, size: 20)),
+      );
+
+  Widget _section(List<Widget> children) => Container(
+        color: Colors.white,
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+      );
+
   @override
   Widget build(BuildContext context) {
     final p = (d?['project'] as Map?)?.cast<String, dynamic>();
     final logs = ((d?['logs'] as List?) ?? const []).cast<Json>();
     if (p == null) return Scaffold(appBar: AppBar(), body: Loading(err: err, retry: load));
     final done = p['status'] == 'hoan_thanh';
-    final progress = asInt(p['progress']);
+    final progress = done ? 100 : asInt(p['progress']);
+    final latest = logs.isNotEmpty ? logs.first : null;
+    final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
       backgroundColor: _bg,
-      body: RefreshIndicator(
-        onRefresh: load,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            SizedBox(
-              height: 240,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  asInt(p['cover']) > 0 || str(p['cover_url']).isNotEmpty ? _coverImage(p) : Container(color: _ink),
-                  const DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0x66000000), Color(0x00000000), Color(0xCC0B2340)],
-                      ),
-                    ),
-                  ),
-                  SafeArea(
-                    child: Row(
-                      children: [
-                        IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Icons.arrow_back, color: Colors.white)),
-                        const Spacer(),
-                        PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, color: Colors.white),
-                          onSelected: (v) async {
-                            final have = ((d?['photos'] as List?) ?? const []).length;
-                            if (v == 'edit' && context.mounted && await editProject(context, {...p, 'photos_project': have}) != null) load();
-                            if (v == 'status') setStatus(p);
-                            if (v == 'del') remove(p);
-                          },
-                          itemBuilder:
-                              (_) => [
-                                const PopupMenuItem(value: 'edit', child: Text('Sửa dự án, tiến độ')),
-                                PopupMenuItem(value: 'status', child: Text(done ? 'Chuyển về Đang thi công' : 'Đánh dấu Hoàn thành')),
-                                const PopupMenuItem(value: 'del', child: Text('Xoá dự án', style: TextStyle(color: C.bad))),
-                              ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 14,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      spacing: 4,
-                      children: [
-                        _pill(_statusLabel(p['status']), done ? const Color(0xFFE8F5E9) : _gold, done ? _green : _ink),
-                        Text(str(p['name']), style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
-                        if (str(p['address']).isNotEmpty) Text(str(p['address']), style: const TextStyle(color: Color(0xFFC9D4E5), fontSize: 13)),
-                      ],
-                    ),
-                  ),
-                ],
+      body: Column(children: [
+        // ---- ảnh bìa + tên dự án (thiết kế "Chi tiết dự án") ----
+        SizedBox(
+          height: 230 + top,
+          child: Stack(fit: StackFit.expand, children: [
+            asInt(p['cover']) > 0 || str(p['cover_url']).isNotEmpty ? _coverImage(p, small: false) : Container(color: const Color(0xFF9FB6D1)),
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: [0, .35, .55, 1],
+                  colors: [Color(0x8C0B2340), Color(0x000B2340), Color(0x000B2340), Color(0xD90B2340)],
+                ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 12,
-                children: [
-                  _card(
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      spacing: 8,
-                      children: [
-                        Row(
-                          children: [
-                            const Expanded(child: Text('Tiến độ', style: TextStyle(color: _ink, fontWeight: FontWeight.w800))),
-                            Text('$progress%', style: const TextStyle(color: _ink, fontWeight: FontWeight.w800)),
-                          ],
-                        ),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(value: progress / 100, minHeight: 8, color: _gold, backgroundColor: const Color(0xFFE3E8F0)),
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Expanded(child: _stat('${d?['days'] ?? _daysOf(p)}', 'Ngày')),
-                            Expanded(child: _stat('${p['logs'] ?? 0}', 'Nhật ký')),
-                            Expanded(child: _stat('${p['photos'] ?? 0}', 'Ảnh')),
-                            Expanded(child: _stat('${p['videos'] ?? 0}', 'Video')),
-                          ],
-                        ),
-                      ],
-                    ),
+            Positioned(
+              top: top + 12,
+              left: 12,
+              right: 12,
+              child: Row(children: [
+                _round(Icons.arrow_back, 'Quay lại', () => Navigator.pop(context)),
+                const Spacer(),
+                _round(Icons.ios_share, 'Chia sẻ dự án', () => shareLatest(logs)),
+                const SizedBox(width: 8),
+                _round(Icons.more_horiz, 'Thêm tùy chọn', () => more(p)),
+              ]),
+            ),
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 14,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                  decoration: BoxDecoration(color: done ? _green : _blue, borderRadius: BorderRadius.circular(999)),
+                  child: Text(_statusLabel(p['status']), style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w800)),
+                ),
+                const SizedBox(height: 6),
+                Text(str(p['name']),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 28, height: 1.15, fontWeight: FontWeight.w800, letterSpacing: -0.4)),
+                if (str(p['address']).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Row(spacing: 4, children: [
+                      const Icon(Icons.place, size: 13, color: Color(0xFFC9D4E5)),
+                      Expanded(
+                        child: Text(str(p['address']), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Color(0xFFC9D4E5), fontSize: 12)),
+                      ),
+                    ]),
                   ),
-                  const Text('Nhật ký thi công', style: TextStyle(color: _ink, fontSize: 16, fontWeight: FontWeight.w800)),
-                  if (logs.isEmpty) const Text('Chưa có nhật ký. Bấm "Chụp nhật ký hôm nay" để bắt đầu.', style: T.muted),
-                  for (final l in logs)
+              ]),
+            ),
+          ]),
+        ),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: load,
+            child: ListView(padding: EdgeInsets.zero, children: [
+              // ---- cập nhật mới nhất + tiến độ ----
+              _section([
+                const Text('CẬP NHẬT MỚI NHẤT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .6, color: _blue)),
+                const SizedBox(height: 4),
+                if (latest == null)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text('Chưa có nhật ký. Bấm "Chụp nhật ký hôm nay" để bắt đầu.', style: T.muted),
+                  )
+                else ...[
+                  Text(_fullTime(latest['taken_at']), style: const TextStyle(fontSize: 12, color: _slate)),
+                  _LogPhotos(log: latest, max: 5, onOpen: (ids, i) => push(context, _Viewer(ids: ids, start: i, title: str(p['name']), at: latest['taken_at']))),
+                  if (str(latest['note']).isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text('“${str(latest['note'])}”', style: const TextStyle(fontSize: 13.5, height: 1.45, color: Color(0xFF1E293B))),
+                    ),
+                  _Videos(log: latest),
+                ],
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                  decoration: BoxDecoration(color: const Color(0xFFF7F9FC), borderRadius: BorderRadius.circular(12)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                    Row(children: [
+                      const Expanded(child: Text('Tiến độ công trình', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _ink))),
+                      Text(done ? 'Đã hoàn thành' : '$progress%', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _blue)),
+                    ]),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(value: progress / 100, minHeight: 6, color: _blue, backgroundColor: const Color(0xFFD7DEE7)),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: _stat('${d?['days'] ?? _daysOf(p)}', 'Ngày')),
+                      Expanded(child: _stat('${p['logs'] ?? 0}', 'Nhật ký')),
+                      Expanded(child: _stat('${p['photos'] ?? 0}', 'Ảnh')),
+                      Expanded(child: _stat('${p['videos'] ?? 0}', 'Video')),
+                    ]),
+                  ]),
+                ),
+              ]),
+              // ---- nhật ký trước đây ----
+              if (logs.length > 1) ...[
+                const SizedBox(height: 8),
+                _section([
+                  const Text('Nhật ký trước đây', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink)),
+                  for (final l in logs.skip(1))
                     _LogItem(
                       l: l,
-                      onDelete: () => removeLog(l),
-                      onShare: () => push(context, NtReportScreen(projectId: widget.id, logId: asInt(l['id']))),
+                      onOpen: (ids, i) => push(context, _Viewer(ids: ids, start: i, title: str(p['name']), at: l['taken_at'])),
+                      onMenu: () => logMenu(l),
                     ),
-                  const SizedBox(height: 70),
-                ],
+                ]),
+              ],
+              if (latest != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+                  child: Text('Giữ lâu 1 nhật ký để gửi báo cáo cho khách hoặc xoá.', textAlign: TextAlign.center, style: T.muted.copyWith(fontSize: 11.5)),
+                ),
+              const SizedBox(height: 16),
+            ]),
+          ),
+        ),
+        // ---- Chia sẻ | Chụp nhật ký hôm nay ----
+        Container(
+          decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Color(0xFFE3E8F0)))),
+          padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + MediaQuery.paddingOf(context).bottom),
+          child: Row(spacing: 10, children: [
+            SizedBox(
+              height: 48,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _blue,
+                  side: const BorderSide(color: _blue, width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => shareLatest(logs),
+                icon: const Icon(Icons.ios_share, size: 18),
+                label: const Text('Chia sẻ', style: TextStyle(fontWeight: FontWeight.w800)),
               ),
             ),
-          ],
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton:
-          done
-              ? null
-              : FloatingActionButton.extended(
-                backgroundColor: _gold,
-                foregroundColor: _ink,
-                onPressed: () async {
-                  if (await push<bool>(context, _ntCamera({...p, 'id': widget.id})) == true) load();
-                },
-                icon: const Icon(Icons.photo_camera),
-                label: const Text('Chụp nhật ký hôm nay', style: TextStyle(fontWeight: FontWeight.w800)),
+            if (!done)
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: _gold, foregroundColor: _ink, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                    onPressed: () async {
+                      if (await push<bool>(context, _ntCamera({...p, 'id': widget.id})) == true) load();
+                    },
+                    icon: const Icon(Icons.photo_camera),
+                    label: const FittedBox(child: Text('Chụp nhật ký hôm nay', style: TextStyle(fontWeight: FontWeight.w800))),
+                  ),
+                ),
               ),
+          ]),
+        ),
+      ]),
     );
   }
 }
 
+const _wd = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
+
+/// "Thứ Hai, 23/11/2026 · 08:19"
+String _fullTime(Object? at) {
+  final t = DateTime.tryParse(str(at))?.toLocal();
+  if (t == null) return '';
+  return '${_wd[t.weekday - 1]}, ${p2(t.day)}/${p2(t.month)}/${t.year} · ${p2(t.hour)}:${p2(t.minute)}';
+}
+
+/// Ảnh ghép của 1 nhật ký (thiết kế): hàng 1 = ảnh dọc + ảnh ngang, hàng 2 = 3 ảnh; small: 1 hàng 3 ảnh; ảnh thừa "+N".
+class _LogPhotos extends StatelessWidget {
+  const _LogPhotos({required this.log, required this.onOpen, this.max = 5, this.small = false});
+  final Json log;
+  final int max;
+  final bool small;
+  final void Function(List<int> ids, int start) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final ids = [
+      for (final m in ((log['media'] as List?) ?? const []).cast<Json>())
+        if (m['kind'] == 'photo') asInt(m['id']),
+    ];
+    if (ids.isEmpty) return const SizedBox.shrink();
+    final shown = ids.take(max).toList();
+    final more = ids.length - shown.length;
+    Widget tile(int i, {double ratio = 3 / 4, int flex = 100}) => Expanded(
+          flex: flex,
+          child: AspectRatio(
+            aspectRatio: ratio,
+            child: GestureDetector(
+              onTap: () => onOpen(ids, i),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Stack(fit: StackFit.expand, children: [
+                  NetPhoto(ntPhoto(shown[i])),
+                  if (i == shown.length - 1 && more > 0)
+                    Container(
+                      color: const Color(0x8C0B2340),
+                      alignment: Alignment.center,
+                      child: Text(small ? '+$more' : '+$more ảnh', style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+                    ),
+                ]),
+              ),
+            ),
+          ),
+        );
+    if (small) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(spacing: 5, children: [
+          for (var i = 0; i < 3; i++) i < shown.length ? tile(i, ratio: 1) : const Expanded(child: SizedBox()),
+        ]),
+      );
+    }
+    final first = shown.take(2).toList(), second = shown.length > 2 ? shown.sublist(2) : <int>[];
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(spacing: 5, children: [
+        Row(spacing: 5, children: [
+          if (first.length == 1) tile(0, ratio: 4 / 3) else ...[tile(0, flex: 75), tile(1, ratio: 4 / 3, flex: 133)],
+        ]),
+        if (second.isNotEmpty)
+          Row(spacing: 5, children: [
+            for (var k = 0; k < 3; k++) k < second.length ? tile(k + 2) : const Expanded(child: SizedBox()),
+          ]),
+      ]),
+    );
+  }
+}
+
+/// Video của nhật ký: link xem (có chữ ký).
+class _Videos extends StatelessWidget {
+  const _Videos({required this.log});
+  final Json log;
+  @override
+  Widget build(BuildContext context) {
+    final vs = ((log['media'] as List?) ?? const []).cast<Json>().where((m) => m['kind'] == 'video').toList();
+    if (vs.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(spacing: 12, children: [
+        for (var k = 0; k < vs.length; k++)
+          InkWell(
+            onTap: () => launchUrl(Uri.parse('$host${str(vs[k]['src'])}'), mode: LaunchMode.externalApplication),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(mainAxisSize: MainAxisSize.min, spacing: 6, children: [
+                const Icon(Icons.play_circle_fill, color: _blue, size: 22),
+                Text(vs.length > 1 ? 'Video ${k + 1}' : 'Xem video', style: const TextStyle(color: _blue, fontWeight: FontWeight.w700)),
+              ]),
+            ),
+          ),
+      ]),
+    );
+  }
+}
+
+/// 1 dòng "Nhật ký trước đây": ngày, việc đã làm, 3 ảnh nhỏ (+N); bấm xem ảnh, giữ lâu: gửi báo cáo / xoá.
 class _LogItem extends StatelessWidget {
-  const _LogItem({required this.l, required this.onDelete, required this.onShare});
+  const _LogItem({required this.l, required this.onOpen, required this.onMenu});
   final Json l;
-  final VoidCallback onDelete, onShare;
+  final void Function(List<int> ids, int start) onOpen;
+  final VoidCallback onMenu;
   @override
   Widget build(BuildContext context) {
     final t = DateTime.tryParse(str(l['taken_at']))?.toLocal();
-    final media = ((l['media'] as List?) ?? const []).cast<Json>();
-    final photos = media.where((m) => m['kind'] == 'photo').toList();
-    return GestureDetector(
-      onLongPress: onDelete,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: 12,
-        children: [
-          SizedBox(
-            width: 48,
-            child: Column(
-              children: [
-                Text(t == null ? '' : '${p2(t.day)}/${p2(t.month)}', style: const TextStyle(color: _ink, fontWeight: FontWeight.w800, fontSize: 13)),
-                Text(t == null ? '' : '${p2(t.hour)}:${p2(t.minute)}', style: const TextStyle(color: _slate, fontSize: 11)),
-                if (l['lat'] != null) Padding(padding: const EdgeInsets.only(top: 4), child: _pill('GPS', const Color(0xFFE8F5E9), _green)),
-              ],
+    final ids = [
+      for (final m in ((l['media'] as List?) ?? const []).cast<Json>())
+        if (m['kind'] == 'photo') asInt(m['id']),
+    ];
+    return InkWell(
+      onTap: ids.isEmpty ? onMenu : () => onOpen(ids, 0),
+      onLongPress: onMenu,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: const BoxDecoration(border: Border(top: BorderSide(color: Color(0xFFEEF1F6)))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.center, spacing: 8, children: [
+            Text(t == null ? '' : '${p2(t.day)}/${p2(t.month)}',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: _ink, fontFeatures: [FontFeature.tabularFigures()])),
+            Expanded(
+              child: Text(str(l['note']).isNotEmpty ? str(l['note']) : 'Nhật ký thi công',
+                  maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFF334155))),
             ),
-          ),
-          Expanded(
-            child: _card(
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                spacing: 8,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(str(l['note']).isNotEmpty ? str(l['note']) : 'Nhật ký thi công', style: const TextStyle(color: _ink, fontWeight: FontWeight.w700)),
-                      ),
-                      // gửi báo cáo nhật ký này cho chủ nhà; giữ lâu cả thẻ để xoá
-                      PopupMenuButton<String>(
-                        padding: EdgeInsets.zero,
-                        icon: const Icon(Icons.more_horiz, color: _slate, size: 20),
-                        onSelected: (v) => v == 'share' ? onShare() : onDelete(),
-                        itemBuilder: (_) => const [
-                          PopupMenuItem(value: 'share', child: Text('Gửi báo cáo cho khách')),
-                          PopupMenuItem(value: 'del', child: Text('Xoá nhật ký', style: TextStyle(color: C.bad))),
-                        ],
-                      ),
-                    ],
-                  ),
-                  if (photos.isNotEmpty)
-                    Row(
-                      spacing: 6,
-                      children: [
-                        for (var k = 0; k < photos.length && k < 3; k++)
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => push(context, _Viewer(ids: [for (final x in photos) asInt(x['id'])], start: k)),
-                              child: AspectRatio(
-                                aspectRatio: 1,
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    ClipRRect(borderRadius: BorderRadius.circular(8), child: NetPhoto(ntPhoto(asInt(photos[k]['id'])))),
-                                    if (k == 2 && photos.length > 3)
-                                      Container(
-                                        alignment: Alignment.center,
-                                        decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(8)),
-                                        child: Text(
-                                          '+${photos.length - 3}',
-                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        // luôn 3 ô: nhật ký 1-2 ảnh không bị phình to
-                        for (var k = photos.length; k < 3; k++) const Expanded(child: SizedBox()),
-                      ],
-                    ),
-                  for (final v in media.where((m) => m['kind'] == 'video'))
-                    InkWell(
-                      onTap: () => launchUrl(Uri.parse('$host${str(v['src'])}'), mode: LaunchMode.externalApplication),
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 4),
-                        child: Row(
-                          spacing: 6,
-                          children: [
-                            Icon(Icons.play_circle_fill, color: _blue, size: 22),
-                            Text('Xem video', style: TextStyle(color: _blue, fontWeight: FontWeight.w700)),
-                          ],
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
+            if (l['lat'] != null) _pill('GPS', const Color(0xFFE8F5E9), _green),
+            const Icon(Icons.chevron_right, size: 18, color: Color(0xFF94A3B8)),
+          ]),
+          _LogPhotos(log: l, small: true, max: 3, onOpen: onOpen),
+          _Videos(log: l),
+        ]),
       ),
     );
   }
 }
 
-/// Xem ảnh lớn, vuốt qua lại.
-class _Viewer extends StatelessWidget {
-  const _Viewer({required this.ids, required this.start});
+/// Xem ảnh lớn, vuốt qua lại; đầu trang "2 / 9" + tên dự án · ngày.
+class _Viewer extends StatefulWidget {
+  const _Viewer({required this.ids, required this.start, this.title = '', this.at});
   final List<int> ids;
   final int start;
+  final String title;
+  final Object? at;
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.black,
-    appBar: AppBar(backgroundColor: Colors.black, foregroundColor: Colors.white),
-    body: PageView(
-      controller: PageController(initialPage: start),
-      children: [for (final id in ids) InteractiveViewer(child: Center(child: NetPhoto(ntPhoto(id, small: false), fit: BoxFit.contain)))],
-    ),
-  );
+  State<_Viewer> createState() => _ViewerState();
+}
+
+class _ViewerState extends State<_Viewer> {
+  late int i = widget.start;
+  late final ctl = PageController(initialPage: widget.start);
+
+  @override
+  void dispose() {
+    ctl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = DateTime.tryParse(str(widget.at))?.toLocal();
+    return Scaffold(
+      backgroundColor: const Color(0xFF05080F),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF05080F),
+        foregroundColor: Colors.white,
+        centerTitle: true,
+        title: Column(children: [
+          Text('${i + 1} / ${widget.ids.length}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
+          if (widget.title.isNotEmpty)
+            Text('${widget.title}${t != null ? ' · ${p2(t.day)}/${p2(t.month)}' : ''}',
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFCBD5E1))),
+        ]),
+      ),
+      body: PageView(
+        controller: ctl,
+        onPageChanged: (k) => setState(() => i = k),
+        children: [for (final id in widget.ids) InteractiveViewer(child: Center(child: NetPhoto(ntPhoto(id, small: false), fit: BoxFit.contain)))],
+      ),
+    );
+  }
 }
 
 // ---------------------------------------------------------------- Bản đồ dự án

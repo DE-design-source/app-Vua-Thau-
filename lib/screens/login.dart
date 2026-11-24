@@ -205,8 +205,14 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ? 'Đã nhận đăng ký của số này. Xác minh xong, tài khoản tự có, bạn nhập lại số này để vào.'
                                   : 'Đăng ký nhà thầu, Vua Thầu xác minh xong là tài khoản tự có theo số điện thoại này.',
                               style: T.muted),
+                          if (!ntPending)
+                            Btn('Đăng ký nhà thầu trong app', kind: BtnKind.primary, icon: 'right',
+                                onPressed: () => push(context, RegisterScreen(phone: phone.text.trim(), role: roleNtReg))),
                           if (cfg.ntForm.isNotEmpty && !ntPending)
-                            Btn('Đăng ký nhà thầu', icon: 'right', onPressed: () => launchUrl(Uri.parse(cfg.ntForm), mode: LaunchMode.externalApplication)),
+                            TextButton(
+                              onPressed: () => launchUrl(Uri.parse(cfg.ntForm), mode: LaunchMode.externalApplication),
+                              child: const Text('Hoặc điền form đăng ký nhà thầu (Lark)'),
+                            ),
                         ]),
                       ),
                     Btn('Tiếp tục', kind: BtnKind.primary, onPressed: byPhone, busy: busy == 'ph', disabled: !ready),
