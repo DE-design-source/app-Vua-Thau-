@@ -101,7 +101,8 @@ Future<void> start() async {
   _token = t;
   // mở lại app: biết vai trò trước khi dựng màn (CTV / nhà thầu có giao diện khác nhau)
   if (t != null) await loadMe();
-  authed.value = t != null;
+  // loadMe gặp 401 (hết phiên, bị khoá) đã xoá token: dùng _token, không dùng t cũ (không thì vào app mà không có token)
+  authed.value = _token != null;
 }
 
 bool loggedIn() => _token != null;
