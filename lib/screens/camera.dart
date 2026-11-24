@@ -26,6 +26,7 @@ import '../ui.dart';
 import '../video.dart' show maxVideos, mb, videoLimit, videoMime;
 import 'house.dart';
 import 'nt_report.dart';
+import 'report.dart';
 
 class _Clip {
   _Clip(this.path, this.name, this.bytes, this.secs);
@@ -637,7 +638,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       }
       if (!mounted) return;
       final hid = id;
-      if (widget.hid > 0 || hid == null) {
+      if (hid != null && doneHid != null) {
+        // có ảnh lên hồ sơ: bước cuối là gửi cập nhật cho chủ nhà qua Zalo (bỏ qua được);
+        // hồ sơ mới thì đóng xong sang Chi tiết hồ sơ, hồ sơ có sẵn thì về Chi tiết hồ sơ đang mở
+        Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => ReportScreen(id: hid, uploaded: true, openHouse: widget.hid == 0)));
+      } else if (widget.hid > 0 || hid == null) {
         Navigator.of(context).pop(true);
       } else {
         Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HouseScreen(id: hid)));

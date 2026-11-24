@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vuathau/api.dart';
-import 'package:vuathau/screens/submit.dart' show houseIdOf;
+import 'package:vuathau/screens/camera.dart' show houseIdOf;
 import 'package:vuathau/stamp.dart';
 import 'package:vuathau/ui.dart';
 
@@ -68,7 +68,9 @@ void main() {
       'stages': ['Đào móng / làm móng'],
       'banks': ['Vietcombank'],
       'google_client_id': '',
+      'nt_form': 'https://example.com/form',
     });
+    expect(c.ntForm, 'https://example.com/form');
     expect(c.statusLabel('da_duyet'), 'Chờ thanh toán');
     expect(c.statusTone('da_duyet'), 'ok');
     expect(c.statusLabel('la'), 'la');

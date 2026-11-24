@@ -103,6 +103,8 @@ const _icons = <String, String>{
   'bolt': '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
   'mark': '<path d="M5 12.5 10 17.5 19.5 7"/>',
   'user': '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  'chat': '<path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 21l2-5.8A8.4 8.4 0 1 1 21 11.5z"/>',
+  'link': '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
 };
 
 String _hex(Color c) => '#${(c.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}';
@@ -199,10 +201,13 @@ Future<Res?> push<Res>(BuildContext context, Widget page) => Navigator.of(contex
 
 // ---------- Mảnh giao diện ----------
 class VtAppBar extends StatelessWidget {
-  const VtAppBar({super.key, required this.title, this.sub, this.back = false, this.onBack, this.right});
+  const VtAppBar({super.key, required this.title, this.sub, this.back = false, this.close = false, this.onBack, this.right});
   final String title;
   final String? sub;
   final bool back;
+
+  /// Nút quay lại hiện dấu X (màn dạng bước cuối, đóng là xong)
+  final bool close;
   final VoidCallback? onBack;
   final Widget? right;
 
@@ -222,9 +227,9 @@ class VtAppBar extends StatelessWidget {
                 Transform.translate(
                   offset: const Offset(-8, 0),
                   child: IconButton(
-                    tooltip: 'Quay lại',
+                    tooltip: close ? 'Đóng' : 'Quay lại',
                     onPressed: onBack ?? () => Navigator.of(context).maybePop(),
-                    icon: const Ic('left', color: Colors.white, size: 24),
+                    icon: Ic(close ? 'x' : 'left', color: Colors.white, size: 24),
                   ),
                 )
               else
