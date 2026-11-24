@@ -5,6 +5,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import 'api.dart';
+import 'lfile.dart';
+import 'stamp.dart' show checkCopy;
 import 'ui.dart';
 
 enum CheckState { dang, ok, bad, loi }
@@ -15,9 +17,12 @@ class Check {
   final String text;
 }
 
+/// Kiểm lần lượt từng ảnh (mạng yếu: không chia băng thông cho nhiều ảnh cùng lúc, ảnh đầu có kết quả sớm), gửi
+/// bản thu nhỏ (stamp.checkCopy) kèm sha256 ảnh gốc. Bấm tải lên: stop() bỏ các ảnh chưa kiểm (máy chủ kiểm lúc nộp).
 class Checks extends ChangeNotifier {
   final Map<String, Check> m = {};
-  bool _dead = false;
+  bool _dead = false, _running = false;
+  final _queue = <Future<void> Function()>[];
 
   Check? operator [](String path) => m[path];
 
@@ -28,15 +33,55 @@ class Checks extends ChangeNotifier {
   }
 
   void run(String path, {Object? meta, String name = 'anh.jpg', String mime = 'image/jpeg'}) {
+    _put(path, const Check(CheckState.dang, 'Chờ kiểm…'));
+    _queue.add(() => _check(path, meta, name, mime));
+    _pump();
+  }
+
+  Future<void> _pump() async {
+    if (_running) return;
+    _running = true;
+    while (_queue.isNotEmpty && !_dead) {
+      await _queue.removeAt(0)();
+    }
+    _running = false;
+  }
+
+  Future<void> _check(String path, Object? meta, String name, String mime) async {
+    if (m[path]?.state != CheckState.dang) return; // đã bỏ (stop)
     _put(path, const Check(CheckState.dang, 'AI đang kiểm tra…'));
-    upload('/photos/check', [UpFile('file', path, name, mime)], fields: {if (meta != null) 'meta': jsonEncode(meta)}).then((j) {
+    (String, String)? small;
+    if (mime == 'image/jpeg') {
+      try {
+        small = await checkCopy(path);
+      } catch (_) {
+        small = null; // không thu nhỏ được: gửi ảnh gốc
+      }
+    }
+    try {
+      final j = await upload('/photos/check', [UpFile('file', small?.$1 ?? path, name, mime)],
+          fields: {if (meta != null) 'meta': jsonEncode(meta), if (small != null) 'sha': small.$2});
       final problems = (j['problems'] as List?)?.map((e) => '$e').toList() ?? const [];
       _put(
           path,
           problems.isNotEmpty
               ? Check(CheckState.bad, problems.join(' · '))
               : Check(CheckState.ok, j['ai'] == true ? 'Đạt' : 'Đạt, AI xem lại khi tải lên'));
-    }, onError: (_) => _put(path, const Check(CheckState.loi, 'Chưa kiểm được, sẽ kiểm khi tải lên')));
+    } catch (_) {
+      _put(path, const Check(CheckState.loi, 'Chưa kiểm được, sẽ kiểm khi tải lên'));
+    } finally {
+      if (small != null) deleteLocal(small.$1);
+    }
+  }
+
+  /// Bấm tải lên: bỏ các ảnh chưa kiểm (dồn mạng cho lượt tải lên; máy chủ kiểm lúc nộp).
+  void stop() {
+    _queue.clear();
+    for (final e in m.entries.toList()) {
+      if (e.value.state == CheckState.dang && e.value.text == 'Chờ kiểm…') {
+        _put(e.key, const Check(CheckState.loi, 'Kiểm khi tải lên'));
+      }
+    }
   }
 
   /// "4 đạt · 1 chưa đạt · 1 đang kiểm" cho các ảnh đang chờ tải lên.

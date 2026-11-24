@@ -719,6 +719,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       pct = 0;
       upWhat = '';
     });
+    checks.stop(); // dồn mạng cho lượt tải lên: ảnh chưa kiểm thì máy chủ kiểm lúc nộp
     try {
       int? id = target;
       if (shots.isNotEmpty) {

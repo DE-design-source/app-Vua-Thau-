@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
@@ -266,9 +267,37 @@ class StampPainter extends CustomPainter {
       old.d.logo != d.logo || old.d.scale != d.scale || old.d.badge != d.badge;
 }
 
-Uint8List _encode((Uint8List, int, int) a) {
+// JPEG 85 (trước là 90): mắt thường không thấy khác, file nhẹ hơn ~25% (mạng yếu ở tỉnh tải lên nhanh hơn)
+Uint8List _encode((Uint8List, int, int) a) => _encodeQ((a.$1, a.$2, a.$3, 85));
+
+Uint8List _encodeQ((Uint8List, int, int, int) a) {
   final im = img.Image.fromBytes(width: a.$2, height: a.$3, bytes: a.$1.buffer, numChannels: 4);
-  return img.encodeJpg(im, quality: 90);
+  return img.encodeJpg(im, quality: a.$4);
+}
+
+/// Cạnh dài bản thu nhỏ gửi đi kiểm (AI đọc được giờ, địa chỉ, bảng hiệu; nhẹ ~5 lần ảnh gốc)
+const checkSide = 1280;
+
+/// Bản thu nhỏ của ảnh đã in chữ để gửi AI kiểm (mạng yếu: ~150KB thay vì ~800KB) + sha256 của ảnh gốc
+/// (máy chủ lưu kết quả theo ảnh gốc: lúc nộp không đọc lại). Bản web: null (gửi ảnh gốc như cũ).
+Future<(String, String)?> checkCopy(String path) async {
+  if (kIsWeb) return null;
+  final bytes = await readLocal(path);
+  final sha = sha256.convert(bytes).toString();
+  final buf = await ui.ImmutableBuffer.fromUint8List(bytes);
+  final desc = await ui.ImageDescriptor.encoded(buf);
+  final k = math.min(1.0, checkSide / math.max(desc.width, desc.height));
+  final codec = await desc.instantiateCodec(targetWidth: math.max(1, (desc.width * k).round()), targetHeight: math.max(1, (desc.height * k).round()));
+  final im = (await codec.getNextFrame()).image;
+  final w = im.width, h = im.height;
+  final rgba = await im.toByteData(format: ui.ImageByteFormat.rawRgba);
+  im.dispose();
+  codec.dispose();
+  desc.dispose();
+  buf.dispose();
+  if (rgba == null) return null;
+  final jpg = await compute(_encodeQ, (rgba.buffer.asUint8List(), w, h, 75));
+  return (await saveTemp(jpg, 'kiem-${DateTime.now().microsecondsSinceEpoch}.jpg'), sha);
 }
 
 /// Ảnh vừa chụp -> thu về tối đa 1920px, in dải chữ, lưu JPEG vào bộ nhớ tạm. Trả đường dẫn file mới.
