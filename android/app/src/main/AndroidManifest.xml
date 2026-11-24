@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Chụp ảnh công trình để nộp hồ sơ nghiệm thu -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Lưu ảnh vào máy (Cài đặt nhà thầu): Android 10 trở xuống cần quyền ghi bộ nhớ -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <!-- Ảnh nghiệm thu bắt buộc có giờ và vị trí công trình -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -10,6 +12,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <application
+        android:requestLegacyExternalStorage="true"
         android:label="Vua Thầu Map"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

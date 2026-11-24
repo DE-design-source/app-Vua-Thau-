@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:gal/gal.dart';
 import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart' show MediaType;
@@ -28,3 +29,11 @@ Widget localImage(String path, {BoxFit? fit, int? cacheWidth}) => Image.file(Fil
 
 Future<http.MultipartFile> multipartOf(String field, String path, String name, MediaType? type) =>
     http.MultipartFile.fromPath(field, path, filename: name, contentType: type);
+
+/// "Lưu ảnh vào máy" (Cài đặt nhà thầu): lưu ảnh đã in dải chữ vào thư viện ảnh, album "Vua Thầu".
+Future<void> saveToDevice(String path, String name) async {
+  if (!await Gal.hasPermission(toAlbum: true) && !await Gal.requestPermission(toAlbum: true)) {
+    throw Exception('Chưa cho phép app lưu ảnh vào thư viện ảnh.');
+  }
+  await Gal.putImage(path, album: 'Vua Thầu');
+}

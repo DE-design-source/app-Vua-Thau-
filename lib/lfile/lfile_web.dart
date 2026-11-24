@@ -28,3 +28,7 @@ Widget localImage(String path, {BoxFit? fit, int? cacheWidth}) {
 
 Future<http.MultipartFile> multipartOf(String field, String path, String name, MediaType? type) async =>
     http.MultipartFile.fromBytes(field, await readLocal(path), filename: name, contentType: type);
+
+/// "Lưu ảnh vào máy" (Cài đặt nhà thầu): web tải file ảnh xuống (iPhone: vào app Tệp / Downloads).
+Future<void> saveToDevice(String path, String name) async =>
+    XFile.fromData(await readLocal(path), mimeType: 'image/jpeg', name: name).saveTo(name);

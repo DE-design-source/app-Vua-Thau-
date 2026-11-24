@@ -6,8 +6,10 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -90,6 +92,26 @@ String _statusLabel(Object? s) => s == 'hoan_thanh' ? 'Hoàn thành' : 'Đang th
 
 // ---------------------------------------------------------------- khung tab
 
+/// Đã tự mở camera lần đầu vào app chưa (1 lần mỗi lần mở app).
+bool _autoCamDone = false;
+
+/// "Lưu ảnh vào máy" (Cài đặt nhà thầu, lưu trên máy này): ảnh nhật ký lưu thêm vào thư viện ảnh khi tải lên.
+final ntSaveDevice = ValueNotifier<bool>(false);
+const _prefs = FlutterSecureStorage();
+
+Future<void> loadSaveDevice() async {
+  try {
+    ntSaveDevice.value = await _prefs.read(key: 'nt_save_device') == '1';
+  } catch (_) {}
+}
+
+Future<void> setSaveDevice(bool on) async {
+  ntSaveDevice.value = on;
+  try {
+    await _prefs.write(key: 'nt_save_device', value: on ? '1' : '0');
+  } catch (_) {}
+}
+
 class NtShell extends StatefulWidget {
   const NtShell({super.key});
   @override
@@ -105,6 +127,14 @@ class _NtShellState extends State<NtShell> {
   void initState() {
     super.initState();
     warmCamera();
+    loadSaveDevice();
+    // mở app là vào thẳng camera (góp ý 24/11/2026: tạo thói quen chụp mỗi ngày); đóng camera thì về Trang chủ
+    if (!_autoCamDone) {
+      _autoCamDone = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) shoot();
+      });
+    }
   }
 
   void reloadAll() {
@@ -239,6 +269,7 @@ Widget _ntCamera(Json? p, {Widget? bottomBar}) {
     ntLat: p == null ? null : _num(p['lat']),
     ntLng: p == null ? null : _num(p['lng']),
     ntPick: pickNtProject,
+    ntSave: ntSaveDevice.value,
     bottomBar: bottomBar,
     ntBrand: b.brand.isNotEmpty ? b.brand : ntCompany.value,
     ntLogo: b.logo,
@@ -1749,6 +1780,18 @@ class _NtAccountState extends State<NtAccount> with PageData {
                         subtitle: const Text('Gửi link các dự án của bạn cho khách'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => sharePortfolio(context),
+                      ),
+                      const Divider(height: 1, indent: 16),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: ntSaveDevice,
+                        builder: (context, on, _) => SwitchListTile(
+                          secondary: const Icon(Icons.download_outlined, color: _blue),
+                          title: const Text('Lưu ảnh vào máy', style: TextStyle(fontWeight: FontWeight.w700)),
+                          subtitle: Text(kIsWeb ? 'Tải ảnh nhật ký xuống máy khi tải lên' : 'Lưu ảnh nhật ký vào thư viện ảnh (album Vua Thầu)'),
+                          value: on,
+                          activeTrackColor: _green,
+                          onChanged: setSaveDevice,
+                        ),
                       ),
                     ]),
                   ),

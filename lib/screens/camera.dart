@@ -84,7 +84,7 @@ class CameraScreen extends StatefulWidget {
   /// Xong -> màn Xác nhận nhật ký: công trình + khớp GPS, hạng mục hôm nay, ghi chú -> tải lên). ntLat/ntLng: vị trí dự án nếu có.
   /// ntBrand: tên công ty nhà thầu in trên ảnh (dải chữ mới: tên công ty | ngày giờ, địa chỉ, GPS).
   /// ntLogo / ntScale / ntBadge: màn Logo trên ảnh (logo công ty thay tên chữ, cỡ, nhãn Vua Thầu xác minh).
-  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng, this.ntBrand = '', this.ntLogo, this.ntScale = 1, this.ntBadge = false, this.ntPick, this.bottomBar});
+  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng, this.ntBrand = '', this.ntLogo, this.ntScale = 1, this.ntBadge = false, this.ntPick, this.bottomBar, this.ntSave = false});
   final int hid, have, ntProject;
   final String ntName, ntBrand;
   final ui.Image? ntLogo;
@@ -97,6 +97,9 @@ class CameraScreen extends StatefulWidget {
 
   /// bottomBar: thanh tab của app hiện dưới màn chụp (máy dọc), như các màn khác.
   final Widget? bottomBar;
+
+  /// ntSave: "Lưu ảnh vào máy" (Cài đặt nhà thầu): lưu ảnh vào máy trước khi tải nhật ký lên.
+  final bool ntSave;
   final double? ntLat, ntLng;
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -105,6 +108,7 @@ class CameraScreen extends StatefulWidget {
 class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
   // dự án của nhật ký (nhà thầu); chụp trước chọn sau: 0 cho tới khi chọn
   late int ntPid = widget.ntProject;
+  final _savedLocal = <String>{}; // ảnh đã lưu vào máy
   late String ntPname = widget.ntName;
   late double? ntPlat = widget.ntLat, ntPlng = widget.ntLng;
   bool get _nt => widget.ntProject > 0 || widget.ntPick != null;
@@ -577,6 +581,20 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     if (ntPid == 0 && !await _pickProject()) {
       if (mounted) setState(() => err = 'Chọn dự án cho nhật ký này rồi bấm Tải lên.');
       return;
+    }
+    // Lưu ảnh vào máy (1 lần mỗi ảnh, kể cả khi tải lên lỗi phải thử lại)
+    if (widget.ntSave) {
+      var n = 0;
+      for (final sh in shots) {
+        if (!_savedLocal.add(sh.path)) continue;
+        try {
+          await saveToDevice(sh.path, 'vuathau-${DateTime.now().millisecondsSinceEpoch}-${n++}.jpg');
+        } catch (e) {
+          _savedLocal.remove(sh.path);
+          toast('Không lưu được ảnh vào máy: ${errMsg(e)}');
+          break;
+        }
+      }
     }
     // mô tả nhật ký = hạng mục đã chọn + ghi chú, vd "Cốp pha, Cốt thép. Lắp cốp pha cột tầng 2"
     final note = [if (ntCats.isNotEmpty) [for (final c in _ntCats) if (ntCats.contains(c)) c].join(', '), ntNote.text.trim()]
