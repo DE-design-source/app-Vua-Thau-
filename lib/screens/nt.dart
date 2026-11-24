@@ -1840,6 +1840,26 @@ class _NtAccountState extends State<NtAccount> with PageData {
                       }
                     },
                   ),
+                  const SizedBox(height: 8),
+                  // CH Play bắt buộc: tự xoá tài khoản ngay trong app
+                  TextButton(
+                    onPressed: () async {
+                      if (!await confirm(context,
+                          title: 'Xoá vĩnh viễn tài khoản?',
+                          text: 'Hồ sơ năng lực, link báo cáo gửi chủ nhà sẽ không mở được nữa. Không khôi phục được.',
+                          ok: 'Xoá tài khoản')) {
+                        return;
+                      }
+                      try {
+                        final j = await delete('/me');
+                        await setToken(null); // màn gốc tự về đăng nhập
+                        toast(msgsOf(j));
+                      } catch (e) {
+                        if (loggedIn()) toast(errMsg(e));
+                      }
+                    },
+                    child: Text('Xoá tài khoản', style: TextStyle(color: C.subtle)),
+                  ),
                   const SizedBox(height: 16),
                   Center(child: Text('Vua Thầu Map${version.isNotEmpty ? ' · phiên bản $version' : ''}', style: T.cap.copyWith(color: C.subtle))),
                 ],
