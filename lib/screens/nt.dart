@@ -463,7 +463,7 @@ class _NtHomeState extends State<NtHome> with PageData {
                     const Text('Công trình Vua Thầu ghi nhận', style: TextStyle(color: _ink, fontSize: 16, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
                     const Text('CTV Vua Thầu đã chụp, bảng hiệu ghi số điện thoại của bạn.', style: TextStyle(color: _slate, fontSize: 12)),
-                    for (final s in sites) Padding(padding: const EdgeInsets.only(top: 10), child: NtSiteRow(s: s)),
+                    for (final s in sites) Padding(padding: const EdgeInsets.only(top: 10), child: NtSiteRow(s: s, onChanged: widget.onChanged)),
                   ],
                 ],
               ),
@@ -541,21 +541,39 @@ Widget _stat(String n, String label) => Column(
   ],
 );
 
-Widget _cover(Json p, {double size = 64, double radius = 10}) {
+/// Ảnh bìa dự án: ảnh của nhà thầu; dự án nhận từ công trình CTV chưa có ảnh thì ảnh CTV (link công khai cover_url).
+Widget _coverImage(Json p, {bool small = true, double? width, double? height}) {
   final c = asInt(p['cover']);
-  return ClipRRect(
-    borderRadius: BorderRadius.circular(radius),
-    child:
-        c > 0
-            ? NetPhoto(ntPhoto(c), width: size, height: size)
-            : Container(width: size, height: size, color: const Color(0xFFE3E8F0), child: const Icon(Icons.apartment, color: _slate)),
-  );
+  final url = str(p['cover_url']);
+  if (c > 0) return NetPhoto(ntPhoto(c, small: small), width: width, height: height);
+  if (url.isNotEmpty) {
+    return Image.network('$host$url', width: width, height: height, fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Container(width: width, height: height, color: const Color(0xFFE3E8F0)));
+  }
+  return Container(width: width, height: height, color: const Color(0xFFE3E8F0), child: const Icon(Icons.apartment, color: _slate));
+}
+
+Widget _cover(Json p, {double size = 64, double radius = 10}) =>
+    ClipRRect(borderRadius: BorderRadius.circular(radius), child: _coverImage(p, width: size, height: size));
+
+/// Chụp nhật ký vào công trình Vua Thầu ghi nhận: nhận công trình thành dự án của mình (1 lần) rồi mở camera.
+Future<bool> shootSite(BuildContext context, int hid) async {
+  Json? p;
+  try {
+    p = (await post('/nt/sites/$hid/claim'))['project'] as Json?;
+  } catch (e) {
+    toast(errMsg(e));
+    return false;
+  }
+  if (p == null || !context.mounted) return false;
+  return await push<bool>(context, _ntCamera(p)) == true;
 }
 
 /// 1 công trình Vua Thầu ghi nhận (CTV chụp, bảng hiệu có SĐT nhà thầu): ảnh bìa công khai, địa chỉ, giai đoạn, ngày chụp.
 class NtSiteRow extends StatelessWidget {
-  const NtSiteRow({super.key, required this.s});
+  const NtSiteRow({super.key, required this.s, this.onChanged});
   final Json s;
+  final VoidCallback? onChanged; // vừa chụp nhật ký (công trình thành dự án của mình): tải lại
   @override
   Widget build(BuildContext context) {
     final cover = str(s['cover_url']);
@@ -566,7 +584,11 @@ class NtSiteRow extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
-        onTap: () => push(context, GuestProject(id: asInt(s['id']), signedIn: true)),
+        onTap: () async {
+          final hid = asInt(s['id']);
+          await push(context, GuestProject(id: hid, signedIn: true, onShoot: (ctx) => shootSite(ctx, hid)));
+          onChanged?.call();
+        },
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Row(
@@ -597,7 +619,15 @@ class NtSiteRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: _slate),
+              // chụp nhật ký vào công trình này luôn
+              IconButton.filledTonal(
+                tooltip: 'Chụp nhật ký',
+                style: IconButton.styleFrom(backgroundColor: _gold, foregroundColor: _ink),
+                onPressed: () async {
+                  if (await shootSite(context, asInt(s['id']))) onChanged?.call();
+                },
+                icon: const Icon(Icons.photo_camera, size: 20),
+              ),
             ],
           ),
         ),
@@ -685,7 +715,7 @@ class _NtProjectsState extends State<NtProjects> with PageData {
           const Text('Công trình Vua Thầu ghi nhận', style: TextStyle(color: _ink, fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 2),
           const Text('CTV Vua Thầu đã chụp, bảng hiệu ghi số điện thoại của bạn.', style: TextStyle(color: _slate, fontSize: 12)),
-          for (final s in sites) Padding(padding: const EdgeInsets.only(top: 10), child: NtSiteRow(s: s)),
+          for (final s in sites) Padding(padding: const EdgeInsets.only(top: 10), child: NtSiteRow(s: s, onChanged: widget.onChanged)),
         ]),
       );
 
@@ -898,7 +928,7 @@ class _NtProjectDetailState extends State<NtProjectDetail> with PageData {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  asInt(p['cover']) > 0 ? NetPhoto(ntPhoto(asInt(p['cover']), small: true)) : Container(color: _ink),
+                  asInt(p['cover']) > 0 || str(p['cover_url']).isNotEmpty ? _coverImage(p) : Container(color: _ink),
                   const DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(

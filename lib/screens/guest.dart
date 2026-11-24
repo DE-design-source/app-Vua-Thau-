@@ -323,9 +323,11 @@ Widget _chip(String s, Color bg, Color fg) => Container(
 
 class GuestProject extends StatefulWidget {
   /// signedIn: nhà thầu đã đăng nhập mở công trình Vua Thầu ghi nhận: không hiện ô mời đăng nhập.
-  const GuestProject({super.key, required this.id, this.signedIn = false});
+  /// onShoot: nhà thầu chụp nhật ký vào công trình này (nút "Chụp nhật ký hôm nay"); null: không có nút.
+  const GuestProject({super.key, required this.id, this.signedIn = false, this.onShoot});
   final int id;
   final bool signedIn;
+  final Future<bool> Function(BuildContext context)? onShoot;
   @override
   State<GuestProject> createState() => _GuestProjectState();
 }
@@ -358,12 +360,26 @@ class _GuestProjectState extends State<GuestProject> with PageData {
   Widget build(BuildContext context) {
     final p = d;
     final ps = ((p?['photos'] as List?) ?? const []).cast<Json>();
+    final shoot = widget.onShoot;
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(title: const Text('Chi tiết công trình'), backgroundColor: Colors.white, surfaceTintColor: Colors.white),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+      floatingActionButton: shoot == null || p == null
+          ? null
+          : FloatingActionButton.extended(
+              backgroundColor: const Color(0xFFFFB81C),
+              foregroundColor: const Color(0xFF0B2340),
+              onPressed: () async {
+                // chụp xong: công trình đã thành dự án của nhà thầu, quay về danh sách
+                if (await shoot(context) && context.mounted) Navigator.of(context).pop();
+              },
+              icon: const Icon(Icons.photo_camera),
+              label: const Text('Chụp nhật ký hôm nay', style: TextStyle(fontWeight: FontWeight.w800)),
+            ),
       body: p == null
           ? Loading(err: err, retry: load)
-          : ListView(padding: const EdgeInsets.fromLTRB(16, 4, 16, 32), children: [
+          : ListView(padding: EdgeInsets.fromLTRB(16, 4, 16, shoot == null ? 32 : 96), children: [
               Text(str(p['address']).isNotEmpty ? str(p['address']) : 'Công trình', style: T.secT),
               const SizedBox(height: 4),
               Text([str(p['province_name']), str(p['stage']), 'chụp ${_ago(_days({'at': p['at']})).toLowerCase()}'].where((x) => x.isNotEmpty).join(' · '),
