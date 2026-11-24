@@ -16,10 +16,14 @@ class Pos {
 }
 
 class StampData {
-  const StampData(this.date, this.pos, this.addr);
+  const StampData(this.date, this.pos, this.addr, {this.brand = ''});
   final DateTime date;
   final Pos? pos;
   final String addr;
+
+  /// Tên công ty nhà thầu: có thì in dải chữ mới (thiết kế 24/11/2026) "Smartcons | ngày giờ / địa chỉ / GPS";
+  /// trống (CTV): dải chữ kiểu Timemark như cũ.
+  final String brand;
 }
 
 const _week = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật']; // DateTime.weekday: 1 = thứ Hai
@@ -88,7 +92,46 @@ List<String> _wrap(String text, double size, double maxW, int maxLines) {
   return out;
 }
 
+/// Dải chữ nhà thầu: tên công ty chữ đậm bên trái | vạch dọc | thứ ngày giờ, địa chỉ, toạ độ bên phải, sát đáy ảnh.
+void _paintBrand(Canvas c, double W, double H, StampData d) {
+  final u = math.min(W, H) / 100, t = d.date, x = 4.5 * u;
+  // tên công ty: to, đậm; dài quá 36% bề ngang thì thu nhỏ chữ cho vừa
+  var bs = 6.4 * u;
+  var bw = _width(d.brand, bs, FontWeight.w800);
+  final maxB = 0.36 * W;
+  if (bw > maxB) {
+    bs *= maxB / bw;
+    bw = maxB;
+  }
+  final dx = x + bw + 3.2 * u, rx = dx + 3.2 * u, maxW = W - rx - 3.5 * u;
+  var fs = 3.3 * u;
+  final date = '${_week[t.weekday - 1]}, ${p2(t.day)} Tháng ${t.month}, ${t.year} ${p2(t.hour)}:${p2(t.minute)}';
+  final gps = d.pos != null ? '${_deg(d.pos!.lat, 'N', 'S')}, ${_deg(d.pos!.lng, 'E', 'W')}' : 'Đang lấy vị trí GPS…';
+  final widest = math.max(_width(date, fs, FontWeight.w500), _width(gps, fs, FontWeight.w500));
+  if (widest > maxW) fs *= maxW / widest;
+  final lh = fs * 1.32;
+  final lines = [date, if (d.addr.isNotEmpty) ..._wrap(d.addr, fs, maxW, 2), gps];
+  final bottom = H - 4.2 * u; // đường chân chữ dòng cuối
+  final top = bottom - (lines.length - 1) * lh - fs;
+  for (var k = 0; k < lines.length; k++) {
+    _text(c, lines[k], rx, bottom - (lines.length - 1 - k) * lh, fs, u, w: FontWeight.w500);
+  }
+  // vạch dọc ngăn tên công ty và thông tin
+  c.drawRect(Rect.fromLTWH(dx, top - 0.6 * u, math.max(1, 0.28 * u), bottom - top + 1.6 * u), Paint()..color = const Color(0xD9FFFFFF));
+  // tên công ty canh giữa theo chiều cao khối thông tin
+  final mid = (top + bottom) / 2;
+  _text(c, d.brand, x, mid + bs * 0.36, bs, u, w: FontWeight.w800);
+}
+
 void paintStamp(Canvas c, double W, double H, StampData d) {
+  if (d.brand.trim().isNotEmpty) {
+    // nền tối mờ dưới đáy cho chữ trắng dễ đọc trên ảnh sáng
+    final u0 = math.min(W, H) / 100;
+    final r = Rect.fromLTWH(0, H - 26 * u0, W, 26 * u0);
+    c.drawRect(r, Paint()..shader = const LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0x00000000), Color(0x8C000000)]).createShader(r));
+    _paintBrand(c, W, H, d);
+    return;
+  }
   final u = math.min(W, H) / 100, x = 5.7 * u, t = d.date;
 
   // Góc trái, từ dưới lên: toạ độ / địa chỉ / thứ, ngày giờ; vạch vàng chạy suốt cạnh trái
@@ -159,7 +202,7 @@ class StampPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) => paintStamp(canvas, size.width, size.height, d);
   @override
   bool shouldRepaint(StampPainter old) =>
-      old.d.date.minute != d.date.minute || old.d.pos?.lat != d.pos?.lat || old.d.pos?.lng != d.pos?.lng || old.d.addr != d.addr;
+      old.d.date.minute != d.date.minute || old.d.pos?.lat != d.pos?.lat || old.d.pos?.lng != d.pos?.lng || old.d.addr != d.addr || old.d.brand != d.brand;
 }
 
 Uint8List _encode((Uint8List, int, int) a) {

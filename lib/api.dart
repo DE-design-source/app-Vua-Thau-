@@ -34,7 +34,11 @@ class Cfg {
         banks = ((j['banks'] as List?) ?? const []).map((e) => '$e').toList(),
         pay = ((j['pay'] as List?) ?? const [0]).map((e) => (e as num).toInt()).toList(),
         videoBonus = (j['video_bonus'] as num?)?.toInt() ?? 0,
-        google = '${j['google_client_id'] ?? ''}';
+        google = '${j['google_client_id'] ?? ''}',
+        ntForm = '${j['nt_form'] ?? ''}';
+
+  /// Form đăng ký nhà thầu (Lark): màn đăng nhập chọn "Nhà thầu" mà SĐT chưa có tài khoản
+  final String ntForm;
 
   /// mã: [nhãn nội bộ, nhãn cho CTV, tông màu]
   final Map<String, List<String>> status;

@@ -45,6 +45,8 @@ Future<void> openPlan() => launchUrl(Uri.parse('$host/quy-hoach'), mode: LaunchM
 
 void openLogin(BuildContext context) => push(context, const LoginScreen());
 
+bool _fromLink = false; // link /app/?as=... chỉ mở màn đăng nhập 1 lần (đăng xuất rồi không mở lại)
+
 // ---------------------------------------------------------------- khung tab
 
 class GuestShell extends StatefulWidget {
@@ -63,7 +65,18 @@ class _GuestShellState extends State<GuestShell> with PageData {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      load();
+      // trang đăng nhập web chuyển sang /app/?as=ctv|nhathau&phone=09...: mở sẵn vai trò + SĐT, tự đăng nhập
+      if (!_fromLink) {
+        _fromLink = true;
+        final q = Uri.base.queryParameters;
+        final role = q['as'] ?? '';
+        if (role == roleCtv || role == roleNt) {
+          push(context, LoginScreen(role: role, phone: q['phone'] ?? '', auto: (q['phone'] ?? '').isNotEmpty));
+        }
+      }
+    });
   }
 
   @override
