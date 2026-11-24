@@ -19,7 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../api.dart';
 import '../page.dart';
-import '../stamp.dart' show p2;
+import '../stamp.dart' show StampData, p2;
 import '../toast.dart';
 import '../ui.dart';
 import 'camera.dart';
@@ -145,7 +145,7 @@ class _NtShellState extends State<NtShell> {
   }
 
   Future<void> shoot() async {
-    final done = await captureToday(context);
+    final done = await captureToday(context, bottomBar: navBar(camera: true));
     if (done == true) reloadAll();
   }
 
@@ -213,8 +213,8 @@ class _NtShellState extends State<NtShell> {
 
 /// Chụp nhật ký hôm nay (nút Chụp hình / "Chụp nhật ký hôm nay"): vào camera ngay, chụp xong mới chọn dự án
 /// (góp ý 24/11/2026: "Vào chụp ảnh trực tiếp không cần hỏi, chọn điền dự án vào sau").
-Future<bool?> captureToday(BuildContext context) =>
-    push<bool>(context, _ntCamera(null, bottomBar: context.findAncestorStateOfType<_NtShellState>()?.navBar(camera: true)));
+Future<bool?> captureToday(BuildContext context, {Widget? bottomBar}) =>
+    push<bool>(context, _ntCamera(null, bottomBar: bottomBar ?? context.findAncestorStateOfType<_NtShellState>()?.navBar(camera: true)));
 
 /// Chọn dự án cho nhật ký vừa chụp: dự án đang thi công (mới cập nhật trước), dự án đã hoàn thành, hoặc tạo dự án mới.
 Future<Json?> pickNtProject(BuildContext context) async {
@@ -270,12 +270,28 @@ Widget _ntCamera(Json? p, {Widget? bottomBar}) {
     ntLng: p == null ? null : _num(p['lng']),
     ntPick: pickNtProject,
     ntSave: ntSaveDevice.value,
+    ntStyle: _ntStyle,
     bottomBar: bottomBar,
     ntBrand: b.brand.isNotEmpty ? b.brand : ntCompany.value,
     ntLogo: b.logo,
     ntScale: b.scale,
     ntBadge: b.badge,
   );
+}
+
+/// Dải chữ nhà thầu theo hồ sơ mới nhất (tên công ty / thương hiệu / logo / cỡ / nhãn), đổi khi hồ sơ tải xong.
+final _ntStyle = _NtStyle();
+
+class _NtStyle extends ValueNotifier<StampData Function(StampData)> {
+  _NtStyle() : super(_apply) {
+    ntCompany.addListener(_bump);
+    ntBranding.addListener(_bump);
+  }
+  void _bump() => value = (d) => _apply(d);
+  static StampData _apply(StampData d) {
+    final b = ntBranding.value;
+    return StampData(d.date, d.pos, d.addr, brand: b.brand.isNotEmpty ? b.brand : ntCompany.value, logo: b.logo, scale: b.scale, badge: b.badge);
+  }
 }
 
 /// Tên công ty (hồ sơ nhà thầu) in trên ảnh nhật ký; cập nhật khi Trang chủ / Tài khoản tải hồ sơ.
