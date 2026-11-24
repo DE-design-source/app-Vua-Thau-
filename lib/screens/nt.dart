@@ -22,6 +22,7 @@ import '../ui.dart';
 import 'camera.dart';
 import 'guest.dart' show GuestProject;
 import 'nt_form.dart';
+import 'nt_explore.dart';
 import 'nt_logo.dart';
 import 'nt_report.dart';
 import 'home_shell.dart' show NavItem, ShootItem;
@@ -97,6 +98,7 @@ class NtShell extends StatefulWidget {
 class _NtShellState extends State<NtShell> {
   int tab = 0;
   final homeKey = GlobalKey<_NtHomeState>(), projKey = GlobalKey<_NtProjectsState>(), mapKey = GlobalKey<_NtMapState>();
+  final exploreKey = GlobalKey<NtExploreState>();
 
   @override
   void initState() {
@@ -108,6 +110,7 @@ class _NtShellState extends State<NtShell> {
     homeKey.currentState?.load();
     projKey.currentState?.load();
     mapKey.currentState?.load();
+    exploreKey.currentState?.load();
   }
 
   Future<void> shoot() async {
@@ -123,7 +126,7 @@ class _NtShellState extends State<NtShell> {
       children: [
         NtHome(key: homeKey, onChanged: reloadAll, goProjects: () => setState(() => tab = 1)),
         NtProjects(key: projKey, onChanged: reloadAll),
-        NtMap(key: mapKey),
+        NtExplore(key: exploreKey, map: NtMap(key: mapKey)),
       ],
     ),
     bottomNavigationBar: Container(
@@ -138,7 +141,7 @@ class _NtShellState extends State<NtShell> {
               Expanded(child: NavItem(label: 'Trang chủ', icon: Icons.home_outlined, iconOn: Icons.home, on: tab == 0, onTap: () => _go(0))),
               Expanded(child: NavItem(label: 'Dự án', icon: Icons.work_outline, iconOn: Icons.work, on: tab == 1, onTap: () => _go(1))),
               Expanded(child: ShootItem(on: false, onTap: shoot)),
-              Expanded(child: NavItem(label: 'Bản đồ', icon: Icons.map_outlined, iconOn: Icons.map, on: tab == 2, onTap: () => _go(2))),
+              Expanded(child: NavItem(label: 'Khám phá', icon: Icons.explore_outlined, iconOn: Icons.explore, on: tab == 2, onTap: () => _go(2))),
               Expanded(
                 child: NavItem(
                   label: 'Tài khoản',
