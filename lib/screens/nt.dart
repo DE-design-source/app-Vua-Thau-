@@ -167,59 +167,63 @@ class _NtShellState extends State<NtShell> {
   }
 }
 
-/// Chụp nhật ký hôm nay: chưa có dự án -> tạo; 1 dự án đang thi công -> chụp luôn; nhiều -> chọn dự án.
-Future<bool?> captureToday(BuildContext context) async {
-  Json j;
+/// Chụp nhật ký hôm nay (nút Chụp hình / "Chụp nhật ký hôm nay"): vào camera ngay, chụp xong mới chọn dự án
+/// (góp ý 24/11/2026: "Vào chụp ảnh trực tiếp không cần hỏi, chọn điền dự án vào sau").
+Future<bool?> captureToday(BuildContext context) => push<bool>(context, _ntCamera(null));
+
+/// Chọn dự án cho nhật ký vừa chụp: dự án đang thi công (mới cập nhật trước), dự án đã hoàn thành, hoặc tạo dự án mới.
+Future<Json?> pickNtProject(BuildContext context) async {
+  List<Json> rows;
   try {
-    j = await api('/nt/projects?status=dang_thi_cong');
+    rows = ((await api('/nt/projects'))['rows'] as List? ?? const []).cast<Json>();
   } catch (e) {
     toast(errMsg(e));
-    return false;
+    return null;
   }
-  if (!context.mounted) return false;
-  var rows = ((j['rows'] as List?) ?? const []).cast<Json>();
-  Json? p;
-  if (rows.isEmpty) {
-    toast('Tạo dự án trước, rồi chụp nhật ký cho dự án đó.');
-    p = await editProject(context, null);
-  } else if (rows.length == 1) {
-    p = rows.first;
-  } else {
-    p = await showModalBottomSheet<Json>(
-      context: context,
-      showDragHandle: true,
-      builder:
-          (ctx) => SafeArea(
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                const Padding(padding: EdgeInsets.fromLTRB(20, 0, 20, 8), child: Text('Chụp nhật ký cho dự án nào?', style: T.secT)),
-                for (final r in rows)
-                  ListTile(
-                    leading: const Icon(Icons.apartment, color: _ink),
-                    title: Text(str(r['name']), style: T.bold),
-                    subtitle: Text('${_statusLabel(r['status'])} · Ngày ${_daysOf(r)}'),
-                    onTap: () => Navigator.pop(ctx, r),
-                  ),
-              ],
-            ),
+  if (!context.mounted) return null;
+  final active = rows.where((r) => r['status'] != 'hoan_thanh').toList(), done = rows.where((r) => r['status'] == 'hoan_thanh').toList();
+  Widget tile(BuildContext ctx, Json r) => ListTile(
+        leading: _cover(r, size: 44),
+        title: Text(str(r['name']), style: T.bold, maxLines: 1, overflow: TextOverflow.ellipsis),
+        subtitle: Text('${_statusLabel(r['status'])} · Ngày ${_daysOf(r)}', maxLines: 1),
+        onTap: () => Navigator.pop(ctx, r),
+      );
+  final picked = await showModalBottomSheet<Object>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (ctx) => SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * .75),
+        child: ListView(shrinkWrap: true, children: [
+          const Padding(padding: EdgeInsets.fromLTRB(20, 0, 20, 8), child: Text('Nhật ký này của dự án nào?', style: T.secT)),
+          for (final r in active) tile(ctx, r),
+          if (done.isNotEmpty) const Padding(padding: EdgeInsets.fromLTRB(20, 10, 20, 4), child: Text('ĐÃ HOÀN THÀNH', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .6, color: _slate))),
+          for (final r in done) tile(ctx, r),
+          ListTile(
+            leading: const CircleAvatar(backgroundColor: _gold, child: Icon(Icons.add, color: _ink)),
+            title: const Text('Tạo dự án mới', style: T.bold),
+            onTap: () => Navigator.pop(ctx, 'new'),
           ),
-    );
-  }
-  if (p == null || !context.mounted) return false;
-  return push<bool>(context, _ntCamera(p));
+        ]),
+      ),
+    ),
+  );
+  if (picked == 'new' && context.mounted) return editProject(context, null);
+  return picked is Json ? picked : null;
 }
 
 double? _num(Object? v) => v is num ? v.toDouble() : null;
 
-/// Camera chụp nhật ký cho dự án p (có vị trí dự án thì màn Xác nhận báo khớp GPS).
-Widget _ntCamera(Json p) {
+/// Camera chụp nhật ký cho dự án p (có vị trí dự án thì màn Xác nhận báo khớp GPS); p null: chụp trước, chọn dự án sau.
+Widget _ntCamera(Json? p) {
   final b = ntBranding.value;
   return CameraScreen(
-    ntProject: asInt(p['id']),
-    ntName: str(p['name']),
-    ntLat: _num(p['lat']),
-    ntLng: _num(p['lng']),
+    ntProject: p == null ? 0 : asInt(p['id']),
+    ntName: p == null ? '' : str(p['name']),
+    ntLat: p == null ? null : _num(p['lat']),
+    ntLng: p == null ? null : _num(p['lng']),
+    ntPick: pickNtProject,
     ntBrand: b.brand.isNotEmpty ? b.brand : ntCompany.value,
     ntLogo: b.logo,
     ntScale: b.scale,
@@ -566,36 +570,14 @@ class _NtHomeState extends State<NtHome> with PageData {
 
 String _thousands(int n) => n.toString().replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => '.');
 
-/// "Báo cáo KH": báo cáo nhật ký mới nhất (nhiều dự án có nhật ký thì chọn dự án).
-Future<void> openLatestReport(BuildContext context, List<Json> projects) async {
-  final withLogs = projects.where((p) => asInt(p['logs']) > 0).toList();
-  if (withLogs.isEmpty) {
-    toast('Chưa có nhật ký nào. Chụp nhật ký hôm nay rồi gửi báo cáo cho khách.');
+/// "Báo cáo KH" (góp ý 24/11/2026): mở danh sách dự án (lưới như trang Dự án) để chọn dự án gửi báo cáo cho khách.
+Future<void> openLatestReport(BuildContext context, [List<Json> projects = const []]) => push(context, const NtReportPick());
+
+/// Báo cáo nhật ký mới nhất của dự án p (chưa có nhật ký: nhắc chụp trước).
+Future<void> _reportOf(BuildContext context, Json p) async {
+  if (asInt(p['logs']) == 0) {
+    toast('Dự án này chưa có nhật ký. Chụp nhật ký hôm nay rồi gửi báo cáo cho khách.');
     return;
-  }
-  var p = withLogs.first;
-  if (withLogs.length > 1) {
-    final picked = await showModalBottomSheet<Json>(
-      context: context,
-      showDragHandle: true,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const Padding(padding: EdgeInsets.fromLTRB(20, 0, 20, 8), child: Text('Gửi báo cáo dự án nào?', style: T.secT)),
-            for (final r in withLogs)
-              ListTile(
-                leading: const Icon(Icons.apartment, color: _ink),
-                title: Text(str(r['name']), style: T.bold),
-                subtitle: Text('${r['logs']} nhật ký · ${_freshness(r).$1}'),
-                onTap: () => Navigator.pop(ctx, r),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (picked == null) return;
-    p = picked;
   }
   try {
     final j = await api('/nt/projects/${p['id']}');
@@ -604,6 +586,75 @@ Future<void> openLatestReport(BuildContext context, List<Json> projects) async {
     await push(context, NtReportScreen(projectId: asInt(p['id']), logId: asInt(logs.first['id'])));
   } catch (e) {
     toast(errMsg(e));
+  }
+}
+
+class NtReportPick extends StatefulWidget {
+  const NtReportPick({super.key});
+  @override
+  State<NtReportPick> createState() => _NtReportPickState();
+}
+
+class _NtReportPickState extends State<NtReportPick> {
+  List<Json>? rows;
+  String err = '', filter = '';
+
+  @override
+  void initState() {
+    super.initState();
+    load();
+  }
+
+  Future<void> load() async {
+    try {
+      final j = await api('/nt/projects');
+      if (mounted) setState(() => rows = ((j['rows'] as List?) ?? const []).cast<Json>());
+    } catch (e) {
+      if (mounted) setState(() => err = errMsg(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final all = rows;
+    final list = all == null ? const <Json>[] : all.where((p) => filter.isEmpty || p['status'] == filter).toList();
+    return Scaffold(
+      backgroundColor: _bg,
+      appBar: AppBar(
+        backgroundColor: _ink,
+        foregroundColor: Colors.white,
+        title: const Text('Gửi báo cáo cho khách', style: TextStyle(fontWeight: FontWeight.w800)),
+      ),
+      body: all == null
+          ? Loading(err: err, retry: load)
+          : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              const Padding(padding: EdgeInsets.fromLTRB(16, 12, 16, 0), child: Text('Chọn dự án để gửi báo cáo nhật ký mới nhất.', style: T.muted)),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Row(spacing: 8, children: [
+                  for (final (k, label) in const [('', 'Tất cả'), ('dang_thi_cong', 'Đang thi công'), ('hoan_thanh', 'Hoàn thành')])
+                    ChoiceChip(
+                      label: Text(label),
+                      selected: filter == k,
+                      showCheckmark: false,
+                      selectedColor: _ink,
+                      labelStyle: TextStyle(fontWeight: FontWeight.w700, color: filter == k ? Colors.white : _ink),
+                      onSelected: (_) => setState(() => filter = k),
+                    ),
+                ]),
+              ),
+              Expanded(
+                child: list.isEmpty
+                    ? const Center(child: Padding(padding: EdgeInsets.all(24), child: Text('Chưa có dự án.', style: T.muted)))
+                    : GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 12, childAspectRatio: .74),
+                        itemCount: list.length,
+                        itemBuilder: (context, i) => _ProjectCard(p: list[i], onChanged: () {}, onTap: () => _reportOf(context, list[i])),
+                      ),
+              ),
+            ]),
+    );
   }
 }
 
@@ -939,18 +990,22 @@ class _NtProjectsState extends State<NtProjects> with PageData {
 }
 
 class _ProjectCard extends StatelessWidget {
-  const _ProjectCard({required this.p, required this.onChanged});
+  const _ProjectCard({required this.p, required this.onChanged, this.onTap});
   final Json p;
   final VoidCallback onChanged;
+
+  /// onTap: thay cho mở chi tiết dự án (VD chọn dự án gửi báo cáo).
+  final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
     final done = p['status'] == 'hoan_thanh';
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () async {
-        await push(context, NtProjectDetail(id: asInt(p['id'])));
-        onChanged();
-      },
+      onTap: onTap ??
+          () async {
+            await push(context, NtProjectDetail(id: asInt(p['id'])));
+            onChanged();
+          },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: 4,
@@ -1114,6 +1169,10 @@ class _NtProjectDetailState extends State<NtProjectDetail> with PageData {
     final done = p['status'] == 'hoan_thanh';
     final progress = done ? 100 : asInt(p['progress']);
     final latest = logs.isNotEmpty ? logs.first : null;
+    // ảnh dự án (form Đăng dự án, không thuộc nhật ký): dự án đăng kèm ảnh / đã hoàn thành chưa có nhật ký vẫn hiện ảnh
+    final Json photos = {'media': ((d?['photos'] as List?) ?? const []).cast<Json>()};
+    final hasPhotos = (photos['media'] as List).isNotEmpty;
+    void openPhotos(List<int> ids, int i) => push(context, _Viewer(ids: ids, start: i, title: str(p['name'])));
     final top = MediaQuery.paddingOf(context).top;
     return Scaffold(
       backgroundColor: _bg,
@@ -1180,9 +1239,12 @@ class _NtProjectDetailState extends State<NtProjectDetail> with PageData {
             child: ListView(padding: EdgeInsets.zero, children: [
               // ---- cập nhật mới nhất + tiến độ ----
               _section([
-                const Text('CẬP NHẬT MỚI NHẤT', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .6, color: _blue)),
+                Text(latest == null && hasPhotos ? 'ẢNH DỰ ÁN' : 'CẬP NHẬT MỚI NHẤT',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .6, color: _blue)),
                 const SizedBox(height: 4),
-                if (latest == null)
+                if (latest == null && hasPhotos)
+                  _LogPhotos(log: photos, max: 5, onOpen: openPhotos)
+                else if (latest == null)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: Text('Chưa có nhật ký. Bấm "Chụp nhật ký hôm nay" để bắt đầu.', style: T.muted),
@@ -1221,6 +1283,15 @@ class _NtProjectDetailState extends State<NtProjectDetail> with PageData {
                   ]),
                 ),
               ]),
+              // ---- ảnh dự án (khi đã có nhật ký thì ảnh dự án ở mục riêng) ----
+              if (latest != null && hasPhotos) ...[
+                const SizedBox(height: 8),
+                _section([
+                  const Text('Ảnh dự án', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink)),
+                  const SizedBox(height: 8),
+                  _LogPhotos(log: photos, max: 5, onOpen: openPhotos),
+                ]),
+              ],
               // ---- nhật ký trước đây ----
               if (logs.length > 1) ...[
                 const SizedBox(height: 8),

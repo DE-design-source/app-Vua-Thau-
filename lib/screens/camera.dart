@@ -84,18 +84,44 @@ class CameraScreen extends StatefulWidget {
   /// Xong -> màn Xác nhận nhật ký: công trình + khớp GPS, hạng mục hôm nay, ghi chú -> tải lên). ntLat/ntLng: vị trí dự án nếu có.
   /// ntBrand: tên công ty nhà thầu in trên ảnh (dải chữ mới: tên công ty | ngày giờ, địa chỉ, GPS).
   /// ntLogo / ntScale / ntBadge: màn Logo trên ảnh (logo công ty thay tên chữ, cỡ, nhãn Vua Thầu xác minh).
-  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng, this.ntBrand = '', this.ntLogo, this.ntScale = 1, this.ntBadge = false});
+  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng, this.ntBrand = '', this.ntLogo, this.ntScale = 1, this.ntBadge = false, this.ntPick});
   final int hid, have, ntProject;
   final String ntName, ntBrand;
   final ui.Image? ntLogo;
   final double ntScale;
   final bool ntBadge;
+
+  /// ntPick: nhà thầu bấm Chụp hình -> vào camera ngay (chưa có dự án), chụp xong mới chọn dự án (góp ý 24/11/2026).
+  /// Trả về dự án đã chọn ({id, name, lat, lng}) hoặc null.
+  final Future<Map<String, dynamic>?> Function(BuildContext context)? ntPick;
   final double? ntLat, ntLng;
   @override
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
 class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
+  // dự án của nhật ký (nhà thầu); chụp trước chọn sau: 0 cho tới khi chọn
+  late int ntPid = widget.ntProject;
+  late String ntPname = widget.ntName;
+  late double? ntPlat = widget.ntLat, ntPlng = widget.ntLng;
+  bool get _nt => widget.ntProject > 0 || widget.ntPick != null;
+
+  /// Chọn / đổi dự án cho nhật ký (true: đã có dự án).
+  Future<bool> _pickProject() async {
+    final pick = widget.ntPick;
+    if (pick == null) return ntPid > 0;
+    final p = await pick(context);
+    if (p == null || !mounted) return ntPid > 0;
+    setState(() {
+      ntPid = asInt(p['id']);
+      ntPname = str(p['name']);
+      ntPlat = p['lat'] is num ? (p['lat'] as num).toDouble() : null;
+      ntPlng = p['lng'] is num ? (p['lng'] as num).toDouble() : null;
+      err = '';
+    });
+    return ntPid > 0;
+  }
+
   CameraController? cam;
   bool camReady = false, denied = false;
   Pos? pos;
@@ -516,7 +542,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       });
       if (firstSign)
         toast('Đã lưu nhà thầu từ bảng hiệu: ${[if (seenName.isNotEmpty) seenName, if (seenPhone.isNotEmpty) prettyPhone(seenPhone)].join(' · ')}');
-      if (widget.ntProject == 0) checks.run(path, meta: meta); // nhật ký nhà thầu: không AI kiểm ảnh
+      if (!_nt) checks.run(path, meta: meta); // nhật ký nhà thầu: không AI kiểm ảnh
     } catch (e) {
       toast('In giờ, vị trí lên ảnh không được: $e');
     } finally {
@@ -545,6 +571,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       setState(() => err = 'Chụp ít nhất 1 ảnh hoặc quay 1 video cho nhật ký hôm nay.');
       return;
     }
+    if (ntPid == 0 && !await _pickProject()) {
+      if (mounted) setState(() => err = 'Chọn dự án cho nhật ký này rồi bấm Tải lên.');
+      return;
+    }
     // mô tả nhật ký = hạng mục đã chọn + ghi chú, vd "Cốp pha, Cốt thép. Lắp cốp pha cột tầng 2"
     final note = [if (ntCats.isNotEmpty) [for (final c in _ntCats) if (ntCats.contains(c)) c].join(', '), ntNote.text.trim()]
         .where((s) => s.isNotEmpty)
@@ -558,7 +588,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     });
     try {
       final j = await upload(
-        '/nt/projects/${widget.ntProject}/logs',
+        '/nt/projects/$ntPid/logs',
         [
           for (var k = 0; k < shots.length; k++) UpFile('files', shots[k].path, 'nhat-ky-${k + 1}.jpg'),
           for (final v in clips) UpFile('files', v.path, v.name, videoMime(v.name)),
@@ -583,7 +613,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (logId > 0) {
         // bước cuối (thiết kế): báo cáo gửi chủ nhà; đóng báo cáo = xong (màn gọi camera tải lại)
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => NtReportScreen(projectId: widget.ntProject, logId: logId, uploaded: asInt(j['photos']))),
+          MaterialPageRoute(builder: (_) => NtReportScreen(projectId: ntPid, logId: logId, uploaded: asInt(j['photos']))),
           result: true,
         );
       } else {
@@ -605,7 +635,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   Future<void> send() async {
     if (recording) await _stopRec();
     await _stamps;
-    if (widget.ntProject > 0) return _sendNt();
+    if (_nt) return _sendNt();
     final target = widget.hid > 0 ? widget.hid : doneHid;
     if (shots.isEmpty && target == null) {
       setState(() => err = 'Chụp ít nhất 1 ảnh để tạo hồ sơ, rồi mới tải video lên.');
@@ -776,9 +806,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             ? (gpsErr.isNotEmpty
                 ? 'Ảnh nghiệm thu bắt buộc có vị trí. Bật quyền Vị trí cho app trong cài đặt máy.'
                 : 'Đang chờ GPS để chụp. Ảnh nghiệm thu bắt buộc có vị trí.')
-            : widget.ntProject > 0
+            : _nt
             ? (shots.isEmpty && clips.isEmpty
-                ? 'Nhật ký ${widget.ntName}: chụp ảnh / quay video việc làm hôm nay.'
+                ? (ntPname.isNotEmpty ? 'Nhật ký $ntPname: chụp ảnh / quay video việc làm hôm nay.' : 'Chụp ảnh / quay video việc làm hôm nay, chọn dự án sau.')
                 : 'Bấm Xong để xác nhận nhật ký rồi tải lên.')
             : shots.length + stamping >= left
             ? 'Đã đủ số ảnh tối đa của hồ sơ. Bấm Xong để tải lên.'
@@ -796,7 +826,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             ? (C.amber, 'GPS ±${p.acc.round()}m')
             : (const Color(0xFFFF7A66), 'GPS yếu ±${p.acc.round()}m, ra chỗ thoáng');
     final goal = min + 1; // đủ ảnh để được mức tiền cao nhất
-    final nt = widget.ntProject > 0;
+    final nt = _nt;
     // viên tròn mờ trên nền ảnh
     BoxDecoration glass([Color? border]) => BoxDecoration(
       color: Colors.black.withValues(alpha: .38),
@@ -1297,7 +1327,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   /// Nhà thầu: khoảng cách (m) từ chỗ chụp tới vị trí dự án; null nếu thiếu toạ độ.
   double? _ntDist() {
-    final la = widget.ntLat, ln = widget.ntLng;
+    final la = ntPlat, ln = ntPlng;
     if (la == null || ln == null) return null;
     final m = shots.isNotEmpty ? shots.first.meta : const <String, Object>{};
     final lat = m['lat'] is num ? (m['lat'] as num).toDouble() : pos?.lat;
@@ -1316,11 +1346,24 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         );
     return [
       cap('CÔNG TRÌNH'),
-      Container(
+      InkWell(
+        borderRadius: BorderRadius.circular(R.ctl),
+        onTap: widget.ntPick != null && pct == null ? _pickProject : null,
+        child: Container(
         padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(R.ctl), border: Border.all(color: C.line)),
+        decoration: BoxDecoration(
+            color: ntPid == 0 ? const Color(0xFFFFF7E0) : Colors.white,
+            borderRadius: BorderRadius.circular(R.ctl),
+            border: Border.all(color: ntPid == 0 ? C.amber : C.line, width: ntPid == 0 ? 2 : 1)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, spacing: 4, children: [
-          Text(widget.ntName.isNotEmpty ? widget.ntName : 'Dự án', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.text)),
+          Row(children: [
+            Expanded(
+              child: Text(ntPid == 0 ? 'Chọn dự án cho nhật ký' : (ntPname.isNotEmpty ? ntPname : 'Dự án'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: C.text)),
+            ),
+            if (widget.ntPick != null)
+              Text(ntPid == 0 ? 'Chọn' : 'Đổi', style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: C.navy3, decoration: TextDecoration.underline)),
+          ]),
           if (d != null)
             Row(spacing: 6, children: [
               Ic(near ? 'check' : 'pin', size: 16, color: near ? C.ok : C.bad),
@@ -1332,6 +1375,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               ),
             ]),
         ]),
+      ),
       ),
       cap('HẠNG MỤC HÔM NAY'),
       Wrap(spacing: 8, runSpacing: 8, children: [
@@ -1359,7 +1403,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   Widget _review() {
     final sum = checks.tally(shots.map((s) => s.path).toList());
     final total = widget.have + shots.length;
-    final nt = widget.ntProject > 0;
+    final nt = _nt;
     final t = DateTime.now();
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark,
