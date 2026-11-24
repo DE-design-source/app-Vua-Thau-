@@ -836,8 +836,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     final hint =
         p == null
             ? (gpsErr.isNotEmpty
-                ? 'Ảnh nghiệm thu bắt buộc có vị trí. Bật quyền Vị trí cho app trong cài đặt máy.'
-                : 'Đang chờ GPS để chụp. Ảnh nghiệm thu bắt buộc có vị trí.')
+                ? (_nt ? 'Ảnh nhật ký cần vị trí công trình. Bật quyền Vị trí cho app trong cài đặt máy.' : 'Ảnh nghiệm thu bắt buộc có vị trí. Bật quyền Vị trí cho app trong cài đặt máy.')
+                : (_nt ? 'Đang chờ GPS để in vị trí lên ảnh.' : 'Đang chờ GPS để chụp. Ảnh nghiệm thu bắt buộc có vị trí.'))
             : _nt
             ? (shots.isEmpty && clips.isEmpty
                 ? (ntPname.isNotEmpty ? 'Nhật ký $ntPname: chụp ảnh / quay video việc làm hôm nay.' : 'Chụp ảnh / quay video việc làm hôm nay, chọn dự án sau.')
