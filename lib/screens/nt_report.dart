@@ -56,10 +56,22 @@ class _NtReportScreenState extends State<NtReportScreen> with PageData {
   }
 
   /// "Chào anh/chị, hôm nay đội đã lắp cốp pha cột tầng 2. Anh/chị xem ảnh thực tế tại link bên dưới ạ."
+  /// Mô tả nhật ký = "Cốp pha, Cốt thép. Lắp cốp pha cột tầng 2" (hạng mục chọn nhanh + ghi chú):
+  /// "hôm nay đội đã lắp cốp pha cột tầng 2 (hạng mục: cốp pha, cốt thép)"; chỉ có hạng mục: "thi công cốp pha, cốt thép".
   String _greeting(Json r) {
     var note = str(r['note']).trim();
+    var cats = '';
+    final dot = note.indexOf('. ');
+    final head = dot > 0 ? note.substring(0, dot) : note.replaceAll(RegExp(r'\.$'), '');
+    if (head.split(', ').every(ntCategories.contains)) {
+      cats = head.toLowerCase();
+      note = dot > 0 ? note.substring(dot + 2).trim() : '';
+    }
     if (note.endsWith('.')) note = note.substring(0, note.length - 1);
-    final what = note.isEmpty ? 'cập nhật tiến độ ${str(r['project'])}' : note[0].toLowerCase() + note.substring(1);
+    String low(String s) => s.isEmpty ? s : s[0].toLowerCase() + s.substring(1);
+    final what = note.isNotEmpty
+        ? '${low(note)}${cats.isNotEmpty ? ' (hạng mục: $cats)' : ''}'
+        : (cats.isNotEmpty ? 'thi công $cats' : 'cập nhật tiến độ ${str(r['project'])}');
     return 'Chào anh/chị, hôm nay đội đã $what. Anh/chị xem ảnh thực tế tại link bên dưới ạ.';
   }
 

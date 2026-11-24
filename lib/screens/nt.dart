@@ -1187,7 +1187,7 @@ class _NtAccountState extends State<NtAccount> with PageData {
                         CircleAvatar(
                           radius: 24,
                           backgroundColor: _ink,
-                          child: Text(name.isEmpty ? 'N' : name.characters.first.toUpperCase(), style: const TextStyle(color: _gold, fontWeight: FontWeight.w800, fontSize: 18)),
+                          child: Text(name.isEmpty ? 'N' : _coInitials(name), style: const TextStyle(color: _gold, fontWeight: FontWeight.w800, fontSize: 16)),
                         ),
                         Expanded(
                           child: Column(
