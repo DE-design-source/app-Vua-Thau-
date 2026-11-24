@@ -154,19 +154,22 @@ class NtExploreState extends State<NtExplore> {
                 for (final (k, label) in _filters)
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
-                    child: ChoiceChip(
-                      label: Text(label),
-                      selected: filter == k,
-                      showCheckmark: false,
-                      visualDensity: VisualDensity.compact,
-                      side: BorderSide.none,
-                      backgroundColor: Colors.white12,
-                      selectedColor: _gold,
-                      labelStyle: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: filter == k ? _ink : Colors.white),
-                      onSelected: (_) {
+                    // chip tự vẽ: ChoiceChip theo theme M3 tô nền trắng cho chip chưa chọn (chữ trắng không đọc được)
+                    child: GestureDetector(
+                      onTap: () {
                         setState(() => filter = k);
                         load();
                       },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: filter == k ? _gold : Colors.white.withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: filter == k ? _gold : Colors.white24),
+                        ),
+                        child: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: filter == k ? _ink : Colors.white)),
+                      ),
                     ),
                   ),
               ]),
