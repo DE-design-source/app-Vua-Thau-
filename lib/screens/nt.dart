@@ -3,8 +3,11 @@
 //   Dự án (hồ sơ năng lực): lọc Tất cả / Đang thi công / Hoàn thành; Chi tiết: tiến độ, nhật ký thi công có giờ + GPS
 //   Chụp ảnh: camera Vua Thầu (in giờ, địa chỉ, GPS) -> mô tả việc đã làm -> tải lên dự án
 //   Bản đồ: các dự án của mình. (Khám phá, logo trên ảnh, chia sẻ hồ sơ: đợt sau.)
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +22,7 @@ import '../ui.dart';
 import 'camera.dart';
 import 'guest.dart' show GuestProject;
 import 'nt_form.dart';
+import 'nt_logo.dart';
 import 'nt_report.dart';
 import 'home_shell.dart' show NavItem, ShootItem;
 
@@ -206,11 +210,53 @@ Future<bool?> captureToday(BuildContext context) async {
 double? _num(Object? v) => v is num ? v.toDouble() : null;
 
 /// Camera chụp nhật ký cho dự án p (có vị trí dự án thì màn Xác nhận báo khớp GPS).
-Widget _ntCamera(Json p) =>
-    CameraScreen(ntProject: asInt(p['id']), ntName: str(p['name']), ntLat: _num(p['lat']), ntLng: _num(p['lng']), ntBrand: ntCompany.value);
+Widget _ntCamera(Json p) {
+  final b = ntBranding.value;
+  return CameraScreen(
+    ntProject: asInt(p['id']),
+    ntName: str(p['name']),
+    ntLat: _num(p['lat']),
+    ntLng: _num(p['lng']),
+    ntBrand: b.brand.isNotEmpty ? b.brand : ntCompany.value,
+    ntLogo: b.logo,
+    ntScale: b.scale,
+    ntBadge: b.badge,
+  );
+}
 
 /// Tên công ty (hồ sơ nhà thầu) in trên ảnh nhật ký; cập nhật khi Trang chủ / Tài khoản tải hồ sơ.
 final ntCompany = ValueNotifier<String>('');
+
+/// Logo trên ảnh: tên thương hiệu / logo công ty in lên ảnh nhật ký, cỡ, nhãn Vua Thầu xác minh (hồ sơ nhà thầu).
+class NtBranding {
+  const NtBranding({this.brand = '', this.logo, this.size = 2, this.badge = true, this.hasLogo = false});
+  final String brand; // tên thương hiệu nhập tay (trống: in tên công ty)
+  final ui.Image? logo;
+  final int size; // 1 nhỏ, 2 vừa, 3 lớn
+  final bool badge, hasLogo;
+  double get scale => const {1: 0.8, 2: 1.0, 3: 1.25}[size] ?? 1.0;
+}
+
+final ntBranding = ValueNotifier<NtBranding>(const NtBranding());
+
+/// Đọc cấu hình Logo trên ảnh từ hồ sơ; có logo thì tải file về (in lên ảnh khi chụp).
+Future<void> loadBranding(Json prof, {bool force = false}) async {
+  final hasLogo = prof['has_logo'] == true;
+  ui.Image? logo = hasLogo && !force ? ntBranding.value.logo : null;
+  if (hasLogo && logo == null) {
+    try {
+      final r = await http.get(Uri.parse('$base/nt/logo'), headers: authHeaders());
+      if (r.statusCode == 200) logo = (await (await ui.instantiateImageCodec(r.bodyBytes)).getNextFrame()).image;
+    } catch (_) {/* không tải được: in tên dạng chữ */}
+  }
+  ntBranding.value = NtBranding(
+    brand: str(prof['brand']),
+    logo: logo,
+    size: asInt(prof['logo_size']) > 0 ? asInt(prof['logo_size']) : 2,
+    badge: prof['show_badge'] != false,
+    hasLogo: hasLogo,
+  );
+}
 
 /// Hồ sơ công ty (khu vực...) từ Trang chủ: đầu trang Dự án dùng lại.
 final ntProfile = ValueNotifier<Json>({});
@@ -258,6 +304,7 @@ class _NtHomeState extends State<NtHome> with PageData {
     final user = (j['user'] as Map?) ?? const {};
     ntCompany.value = str(prof['company']).isNotEmpty ? str(prof['company']) : str(user['name']);
     ntProfile.value = prof.cast<String, dynamic>();
+    loadBranding(ntProfile.value);
   }
 
   String _greet() {
@@ -1586,6 +1633,36 @@ class _NtAccountState extends State<NtAccount> with PageData {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  // ẢNH & THƯƠNG HIỆU (thiết kế "Cài đặt nhà thầu")
+                  const Padding(
+                    padding: EdgeInsets.only(left: 4, bottom: 6),
+                    child: Text('ẢNH & THƯƠNG HIỆU', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: .6, color: Color(0xFF94A3B8))),
+                  ),
+                  Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    child: Column(children: [
+                      ListTile(
+                        leading: const Icon(Icons.branding_watermark_outlined, color: _blue),
+                        title: const Text('Logo trên ảnh', style: TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text(ntBranding.value.hasLogo ? 'Logo công ty' : 'Thay bằng logo công ty bạn'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () async {
+                          await push(context, const NtLogoScreen());
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      const Divider(height: 1, indent: 16),
+                      ListTile(
+                        leading: const Icon(Icons.ios_share, color: _blue),
+                        title: const Text('Chia sẻ hồ sơ năng lực', style: TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: const Text('Gửi link các dự án của bạn cho khách'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => sharePortfolio(context),
+                      ),
+                    ]),
+                  ),
+                  const SizedBox(height: 16),
                   Box(
                     gap: 14,
                     children: [

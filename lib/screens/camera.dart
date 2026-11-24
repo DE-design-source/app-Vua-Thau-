@@ -7,6 +7,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -82,9 +83,13 @@ class CameraScreen extends StatefulWidget {
   /// ntProject > 0: nhà thầu chụp nhật ký thi công cho dự án này (không AI kiểm ảnh, không tiền;
   /// Xong -> màn Xác nhận nhật ký: công trình + khớp GPS, hạng mục hôm nay, ghi chú -> tải lên). ntLat/ntLng: vị trí dự án nếu có.
   /// ntBrand: tên công ty nhà thầu in trên ảnh (dải chữ mới: tên công ty | ngày giờ, địa chỉ, GPS).
-  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng, this.ntBrand = ''});
+  /// ntLogo / ntScale / ntBadge: màn Logo trên ảnh (logo công ty thay tên chữ, cỡ, nhãn Vua Thầu xác minh).
+  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng, this.ntBrand = '', this.ntLogo, this.ntScale = 1, this.ntBadge = false});
   final int hid, have, ntProject;
   final String ntName, ntBrand;
+  final ui.Image? ntLogo;
+  final double ntScale;
+  final bool ntBadge;
   final double? ntLat, ntLng;
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -488,7 +493,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
   Future<void> _stamp(String rawPath, DateTime date, Pos p, String a, String seenName, String seenPhone) async {
     try {
-      final path = await stampPhoto(rawPath, StampData(date, p, a, brand: widget.ntBrand));
+      final path = await stampPhoto(rawPath, StampData(date, p, a, brand: widget.ntBrand, logo: widget.ntLogo, scale: widget.ntScale, badge: widget.ntBadge));
       if (!mounted) {
         deleteLocal(path);
         return;
@@ -1085,7 +1090,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   FittedBox(fit: BoxFit.cover, clipBehavior: Clip.hardEdge, child: SizedBox(width: fw, height: previewH, child: CameraPreview(c)))
                 else
                   const Center(child: CircularProgressIndicator(color: Colors.white)),
-                IgnorePointer(child: CustomPaint(painter: StampPainter(StampData(now, pos, addr, brand: widget.ntBrand)))),
+                IgnorePointer(child: CustomPaint(painter: StampPainter(StampData(now, pos, addr, brand: widget.ntBrand, logo: widget.ntLogo, scale: widget.ntScale, badge: widget.ntBadge)))),
                 IgnorePointer(child: CustomPaint(painter: _LivePainter(live.phoneBox, live.companyBox, live.roll))),
                 if (recording && recAt != null)
                   Positioned(

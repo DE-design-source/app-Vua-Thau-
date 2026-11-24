@@ -16,7 +16,7 @@ class Pos {
 }
 
 class StampData {
-  const StampData(this.date, this.pos, this.addr, {this.brand = ''});
+  const StampData(this.date, this.pos, this.addr, {this.brand = '', this.logo, this.scale = 1, this.badge = false});
   final DateTime date;
   final Pos? pos;
   final String addr;
@@ -24,6 +24,12 @@ class StampData {
   /// Tên công ty nhà thầu: có thì in dải chữ mới (thiết kế 24/11/2026) "Smartcons | ngày giờ / địa chỉ / GPS";
   /// trống (CTV): dải chữ kiểu Timemark như cũ.
   final String brand;
+
+  /// Logo trên ảnh (màn "Logo trên ảnh"): logo công ty thay cho tên dạng chữ; cỡ (0.8 nhỏ / 1 vừa / 1.25 lớn);
+  /// nhãn "Vua Thầu xác minh" góc trên phải.
+  final ui.Image? logo;
+  final double scale;
+  final bool badge;
 }
 
 const _week = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật']; // DateTime.weekday: 1 = thứ Hai
@@ -92,19 +98,32 @@ List<String> _wrap(String text, double size, double maxW, int maxLines) {
   return out;
 }
 
-/// Dải chữ nhà thầu: tên công ty chữ đậm bên trái | vạch dọc | thứ ngày giờ, địa chỉ, toạ độ bên phải, sát đáy ảnh.
+/// Dải chữ nhà thầu: logo / tên công ty bên trái | vạch dọc | thứ ngày giờ, địa chỉ, toạ độ bên phải, sát đáy ảnh;
+/// nhãn "Vua Thầu xác minh" góc trên phải (màn Logo trên ảnh).
 void _paintBrand(Canvas c, double W, double H, StampData d) {
   final u = math.min(W, H) / 100, t = d.date, x = 4.5 * u;
-  // tên công ty: to, đậm; dài quá 36% bề ngang thì xuống 2 hàng (góp ý 24/11), vẫn dài thì thu nhỏ chữ cho vừa
-  var bs = 6.4 * u;
-  final maxB = 0.36 * W;
-  var brand = _wrapBold(d.brand.trim(), bs, maxB);
+  final k = d.scale.clamp(0.6, 1.5);
+  final maxB = 0.36 * W * k.clamp(0.8, 1.25);
+  // logo: cao ~ khối thông tin (3-4 dòng) theo cỡ đã chọn, rộng không quá maxB
+  final logo = d.logo;
+  double lw = 0, lh0 = 0;
+  if (logo != null && logo.width > 0 && logo.height > 0) {
+    lh0 = 13.5 * u * k;
+    lw = lh0 * logo.width / logo.height;
+    if (lw > maxB) {
+      lw = maxB;
+      lh0 = lw * logo.height / logo.width;
+    }
+  }
+  // tên công ty: to, đậm; dài quá thì xuống 2 hàng (góp ý 24/11), vẫn dài thì thu nhỏ chữ cho vừa
+  var bs = 6.4 * u * k;
+  var brand = logo != null ? <String>[] : _wrapBold(d.brand.trim(), bs, maxB);
   if (brand.length > 1) {
-    bs = 5.0 * u; // 2 hàng: chữ nhỏ hơn 1 chút cho cân với khối thông tin
+    bs = 5.0 * u * k; // 2 hàng: chữ nhỏ hơn 1 chút cho cân với khối thông tin
     brand = _wrapBold(d.brand.trim(), bs, maxB);
   }
-  var bw = brand.map((l) => _width(l, bs, FontWeight.w800)).fold<double>(0, math.max);
-  if (bw > maxB) {
+  var bw = logo != null ? lw : brand.map((l) => _width(l, bs, FontWeight.w800)).fold<double>(0, math.max);
+  if (logo == null && bw > maxB) {
     bs *= maxB / bw;
     bw = maxB;
   }
@@ -118,17 +137,33 @@ void _paintBrand(Canvas c, double W, double H, StampData d) {
   final lines = [date, if (d.addr.isNotEmpty) ..._wrap(d.addr, fs, maxW, 2), gps];
   final bottom = H - 4.2 * u; // đường chân chữ dòng cuối
   final top = bottom - (lines.length - 1) * lh - fs;
-  for (var k = 0; k < lines.length; k++) {
-    _text(c, lines[k], rx, bottom - (lines.length - 1 - k) * lh, fs, u, w: FontWeight.w500);
+  for (var i = 0; i < lines.length; i++) {
+    _text(c, lines[i], rx, bottom - (lines.length - 1 - i) * lh, fs, u, w: FontWeight.w500);
   }
-  // vạch dọc ngăn tên công ty và thông tin
+  // vạch dọc ngăn logo / tên công ty và thông tin
   c.drawRect(Rect.fromLTWH(dx, top - 0.6 * u, math.max(1, 0.28 * u), bottom - top + 1.6 * u), Paint()..color = const Color(0xD9FFFFFF));
-  // tên công ty (1 hoặc 2 hàng) canh giữa theo chiều cao khối thông tin
-  final mid = (top + bottom) / 2, blh = bs * 1.15;
-  final first = mid + bs * 0.36 - (brand.length - 1) * blh / 2;
-  for (var k = 0; k < brand.length; k++) {
-    _text(c, brand[k], x, first + k * blh, bs, u, w: FontWeight.w800);
+  final mid = (top + bottom) / 2 + 0.5 * u;
+  if (logo != null) {
+    c.drawImageRect(logo, Rect.fromLTWH(0, 0, logo.width.toDouble(), logo.height.toDouble()), Rect.fromLTWH(x, mid - lh0 / 2, lw, lh0),
+        Paint()..filterQuality = FilterQuality.medium);
+  } else {
+    // tên công ty (1 hoặc 2 hàng) canh giữa theo chiều cao khối thông tin
+    final blh = bs * 1.15;
+    final first = mid - 0.5 * u + bs * 0.36 - (brand.length - 1) * blh / 2;
+    for (var i = 0; i < brand.length; i++) {
+      _text(c, brand[i], x, first + i * blh, bs, u, w: FontWeight.w800);
+    }
   }
+  if (d.badge) _badge(c, W, u);
+}
+
+/// Nhãn "✓ Vua Thầu xác minh" góc trên phải ảnh (chủ nhà tin ảnh hơn khi thấy nhãn này).
+void _badge(Canvas c, double W, double u) {
+  const label = '✓ Vua Thầu xác minh';
+  final fs = 2.6 * u, w = _width(label, fs, FontWeight.w700) + 3.2 * u, h = fs + 2.2 * u;
+  final r = RRect.fromRectAndRadius(Rect.fromLTWH(W - 2.5 * u - w, 2.5 * u, w, h), Radius.circular(h / 2));
+  c.drawRRect(r, Paint()..color = const Color(0x8C000000));
+  _text(c, label, r.left + 1.6 * u, r.top + h / 2 + fs * 0.36, fs, u, w: FontWeight.w700, color: const Color(0xFFFFB81C));
 }
 
 /// Chia tên công ty (chữ đậm) thành tối đa 2 hàng vừa maxW, ngắt ở dấu cách gần giữa nhất.
@@ -149,7 +184,7 @@ List<String> _wrapBold(String s, double size, double maxW) {
 }
 
 void paintStamp(Canvas c, double W, double H, StampData d) {
-  if (d.brand.trim().isNotEmpty) {
+  if (d.brand.trim().isNotEmpty || d.logo != null) {
     // nền tối mờ dưới đáy cho chữ trắng dễ đọc trên ảnh sáng
     final u0 = math.min(W, H) / 100;
     final r = Rect.fromLTWH(0, H - 26 * u0, W, 26 * u0);
@@ -227,7 +262,8 @@ class StampPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) => paintStamp(canvas, size.width, size.height, d);
   @override
   bool shouldRepaint(StampPainter old) =>
-      old.d.date.minute != d.date.minute || old.d.pos?.lat != d.pos?.lat || old.d.pos?.lng != d.pos?.lng || old.d.addr != d.addr || old.d.brand != d.brand;
+      old.d.date.minute != d.date.minute || old.d.pos?.lat != d.pos?.lat || old.d.pos?.lng != d.pos?.lng || old.d.addr != d.addr || old.d.brand != d.brand ||
+      old.d.logo != d.logo || old.d.scale != d.scale || old.d.badge != d.badge;
 }
 
 Uint8List _encode((Uint8List, int, int) a) {
