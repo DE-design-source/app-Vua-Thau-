@@ -148,6 +148,32 @@ class _ProjectFormState extends State<ProjectForm> {
   late final street = TextEditingController(text: str(widget.p?['street']));
   late String prov = str(widget.p?['province']), ward = str(widget.p?['ward']), kind = str(widget.p?['kind']);
   late double progress = asInt(widget.p?['progress']).toDouble();
+  // Tình trạng: dự án mới mặc định Đang thi công; Đã hoàn thành thì chọn Năm hoàn thành
+  late String status = str(widget.p?['status']).isNotEmpty ? str(widget.p?['status']) : 'dang_thi_cong';
+  late int year = DateTime.tryParse(str(widget.p?['finished_on']))?.year ?? DateTime.now().year;
+
+  Widget _statusOpt(String v, String label) {
+    final on = status == v;
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: busy ? null : () => setState(() => status = v),
+        child: Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(
+            color: on ? _chip : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: on ? _blue : _line, width: on ? 1.5 : 1),
+          ),
+          child: Row(spacing: 8, children: [
+            Icon(on ? Icons.radio_button_checked : Icons.radio_button_off, size: 18, color: on ? _blue : _slate),
+            Flexible(child: Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: on ? _blue : const Color(0xFF334155)))),
+          ]),
+        ),
+      ),
+    );
+  }
   LatLng? pin; // ghim tay trên bản đồ (null: máy chủ tra theo địa chỉ)
   final photos = <XFile>[];
   bool busy = false;
@@ -248,7 +274,9 @@ class _ProjectFormState extends State<ProjectForm> {
         'kind': kind,
         if (pin != null) 'lat': pin!.latitude,
         if (pin != null) 'lng': pin!.longitude,
-        if (editing) 'progress': progress.round(),
+        'status': status,
+        if (status == 'hoan_thanh') 'finished_year': year,
+        if (editing && status != 'hoan_thanh') 'progress': progress.round(),
       };
       final j = editing ? await put('/nt/projects/${widget.p!['id']}', body) : await post('/nt/projects', body);
       final proj = (j['project'] as Map?)?.cast<String, dynamic>();
@@ -463,7 +491,20 @@ class _ProjectFormState extends State<ProjectForm> {
                     onSelected: busy ? null : (on) => setState(() => kind = on ? k : ''),
                   ),
               ]),
-              if (editing) ...[
+              // Tình trạng + Năm hoàn thành (góp ý 24/11): đưa cả dự án đã xong vào hồ sơ năng lực
+              _label('Tình trạng'),
+              Row(spacing: 8, children: [_statusOpt('hoan_thanh', 'Đã hoàn thành'), _statusOpt('dang_thi_cong', 'Đang thi công')]),
+              if (status == 'hoan_thanh') ...[
+                const SizedBox(height: 10),
+                DropdownButtonFormField<int>(
+                  initialValue: year,
+                  isExpanded: true,
+                  decoration: _deco('').copyWith(labelText: 'Năm hoàn thành', hintText: null),
+                  items: [for (var y = DateTime.now().year; y >= DateTime.now().year - 15; y--) DropdownMenuItem(value: y, child: Text('$y'))],
+                  onChanged: busy ? null : (v) => setState(() => year = v ?? year),
+                ),
+              ],
+              if (editing && status != 'hoan_thanh') ...[
                 _label('Tiến độ: ${progress.round()}%'),
                 Slider(value: progress, min: 0, max: 100, divisions: 20, activeColor: _ink, onChanged: busy ? null : (v) => setState(() => progress = v)),
               ],

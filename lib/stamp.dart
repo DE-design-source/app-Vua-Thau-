@@ -95,10 +95,15 @@ List<String> _wrap(String text, double size, double maxW, int maxLines) {
 /// Dải chữ nhà thầu: tên công ty chữ đậm bên trái | vạch dọc | thứ ngày giờ, địa chỉ, toạ độ bên phải, sát đáy ảnh.
 void _paintBrand(Canvas c, double W, double H, StampData d) {
   final u = math.min(W, H) / 100, t = d.date, x = 4.5 * u;
-  // tên công ty: to, đậm; dài quá 36% bề ngang thì thu nhỏ chữ cho vừa
+  // tên công ty: to, đậm; dài quá 36% bề ngang thì xuống 2 hàng (góp ý 24/11), vẫn dài thì thu nhỏ chữ cho vừa
   var bs = 6.4 * u;
-  var bw = _width(d.brand, bs, FontWeight.w800);
   final maxB = 0.36 * W;
+  var brand = _wrapBold(d.brand.trim(), bs, maxB);
+  if (brand.length > 1) {
+    bs = 5.0 * u; // 2 hàng: chữ nhỏ hơn 1 chút cho cân với khối thông tin
+    brand = _wrapBold(d.brand.trim(), bs, maxB);
+  }
+  var bw = brand.map((l) => _width(l, bs, FontWeight.w800)).fold<double>(0, math.max);
   if (bw > maxB) {
     bs *= maxB / bw;
     bw = maxB;
@@ -118,9 +123,29 @@ void _paintBrand(Canvas c, double W, double H, StampData d) {
   }
   // vạch dọc ngăn tên công ty và thông tin
   c.drawRect(Rect.fromLTWH(dx, top - 0.6 * u, math.max(1, 0.28 * u), bottom - top + 1.6 * u), Paint()..color = const Color(0xD9FFFFFF));
-  // tên công ty canh giữa theo chiều cao khối thông tin
-  final mid = (top + bottom) / 2;
-  _text(c, d.brand, x, mid + bs * 0.36, bs, u, w: FontWeight.w800);
+  // tên công ty (1 hoặc 2 hàng) canh giữa theo chiều cao khối thông tin
+  final mid = (top + bottom) / 2, blh = bs * 1.15;
+  final first = mid + bs * 0.36 - (brand.length - 1) * blh / 2;
+  for (var k = 0; k < brand.length; k++) {
+    _text(c, brand[k], x, first + k * blh, bs, u, w: FontWeight.w800);
+  }
+}
+
+/// Chia tên công ty (chữ đậm) thành tối đa 2 hàng vừa maxW, ngắt ở dấu cách gần giữa nhất.
+List<String> _wrapBold(String s, double size, double maxW) {
+  if (_width(s, size, FontWeight.w800) <= maxW || !s.contains(' ')) return [s];
+  final words = s.split(' ');
+  var best = [s];
+  var bestW = double.infinity;
+  for (var i = 1; i < words.length; i++) {
+    final a = words.sublist(0, i).join(' '), b = words.sublist(i).join(' ');
+    final w = math.max(_width(a, size, FontWeight.w800), _width(b, size, FontWeight.w800));
+    if (w < bestW) {
+      bestW = w;
+      best = [a, b];
+    }
+  }
+  return best;
 }
 
 void paintStamp(Canvas c, double W, double H, StampData d) {

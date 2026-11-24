@@ -1038,9 +1038,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
     // thông báo trên khung ngắm, ưu tiên: kết quả AI ảnh vừa chụp > gợi ý cầm máy > hướng dẫn
     final coach = _coach();
+    // góp ý 24/11: bỏ dòng hướng dẫn chung trên khung ngắm (che ảnh); chỉ còn cảnh báo thiếu GPS và hết chỗ video
     final tip = videoMode
-        ? (clips.length >= maxVideos ? 'Đã đủ $maxVideos video. Bấm Xong để tải lên.' : 'Quay 1 vòng quanh công trình, tối đa 3 phút.')
-        : hint;
+        ? (clips.length >= maxVideos ? 'Đã đủ $maxVideos video. Bấm Xong để tải lên.' : '')
+        : (p == null ? hint : '');
 
     return LayoutBuilder(
       builder: (context, box) {
@@ -1060,11 +1061,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           final h = math.min(box.maxHeight, (box.maxWidth - ctlW - safe.right) / ar);
           (fw, fh) = (h * ar, h);
         } else {
-          final h = math.min(box.maxWidth * ar, box.maxHeight - ctlH - safe.bottom);
-          (fw, fh) = (h / ar, h);
+          // màn dọc: tràn viền (góp ý 24/11), khung ngắm phủ hết bề ngang + phần trên hàng nút; ảnh xem trước cắt bớt
+          // mép (cover) cho kín khung, không chừa dải đen 2 bên
+          (fw, fh) = (box.maxWidth, math.max(0.0, box.maxHeight - ctlH - safe.bottom));
         }
-        final fl = land ? math.max(0.0, (box.maxWidth - ctlW - safe.right - fw) / 2) : (box.maxWidth - fw) / 2;
-        final previewH = land ? fw / ar : fw * ar; // khung xem trước theo đúng chiều đang cầm
+        final fl = land ? math.max(0.0, (box.maxWidth - ctlW - safe.right - fw) / 2) : 0.0;
+        // khung xem trước đúng tỷ lệ camera theo chiều đang cầm; FittedBox cover phóng cho kín khung, cắt phần thừa
+        final previewH = land ? fw / ar : fw * ar;
         final finder = SizedBox(
           width: fw,
           height: fh,

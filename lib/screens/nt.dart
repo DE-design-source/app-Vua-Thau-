@@ -266,9 +266,22 @@ class _NtHomeState extends State<NtHome> with PageData {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          Container(
-            padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 14, 16, 72),
-            decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF0B2340), Color(0xFF102C5E), Color(0xFF1B3F94)])),
+          // Nền xanh đầu trang vẽ phía SAU, kéo xuống đỡ nửa trên nút "Chụp nhật ký hôm nay".
+          // (Trước đây nút bị Transform.translate dời lên đè vào đầu trang: phần nằm ngoài ô của nó không bấm được.)
+          Stack(
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: MediaQuery.of(context).padding.top + 200,
+                child: const DecoratedBox(decoration: BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF0B2340), Color(0xFF102C5E), Color(0xFF1B3F94)]))),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+          Padding(
+            padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 14, 16, 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -294,9 +307,7 @@ class _NtHomeState extends State<NtHome> with PageData {
               ],
             ),
           ),
-          Transform.translate(
-            offset: const Offset(0, -52),
-            child: Padding(
+                Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -468,7 +479,10 @@ class _NtHomeState extends State<NtHome> with PageData {
                 ],
               ),
             ),
-          ),
+              ],
+            ),
+          ],
+        ),
         ],
       ),
     );

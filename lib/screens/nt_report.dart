@@ -1,6 +1,6 @@
 // "Báo cáo cho khách hàng" (thiết kế 24/11/2026): bước cuối sau khi tải nhật ký lên, hoặc bấm Chia sẻ ở 1 nhật ký.
 // Mỗi nhật ký có link công khai /bc/<mã> (chủ nhà mở xem ảnh thực tế, không cần đăng nhập).
-// Nhà thầu sửa lời nhắn rồi bấm "Link gởi khách hàng": mở bảng chia sẻ của máy (Zalo, Messenger, SMS...);
+// Nhà thầu sửa lời nhắn rồi bấm "Gởi khách hàng": mở bảng chia sẻ của máy (Zalo, Messenger, SMS...);
 // máy / trình duyệt không chia sẻ được thì chép lời nhắn + link vào bộ nhớ tạm để dán.
 import 'dart:convert';
 
@@ -115,14 +115,15 @@ class _NtReportScreenState extends State<NtReportScreen> with PageData {
     }
     if (note.endsWith('.')) note = note.substring(0, note.length - 1);
     String low(String s) => s.isEmpty ? s : s[0].toLowerCase() + s.substring(1);
-    final what = note.isNotEmpty
-        ? '${low(note)}${cats.isNotEmpty ? ' (hạng mục: $cats)' : ''}'
-        : (cats.isNotEmpty ? 'thi công $cats' : 'cập nhật tiến độ ${str(r['project'])}');
-    final hi = owner.text.trim().isEmpty ? 'Chào anh/chị' : 'Chào ${owner.text.trim()}';
-    return '$hi, hôm nay đội đã $what. Anh/chị xem ảnh thực tế tại link bên dưới ạ.';
+    // quy tắc lời nhắn (góp ý 24/11): "Chào anh chị, hôm nay đội thi công đã <hạng mục>, <ghi chú>,
+    // anh chị xem qua ảnh báo cáo công trình ạ, em cám ơn anh chị ạ"
+    final what = [if (cats.isNotEmpty) cats, if (note.isNotEmpty) low(note)].join(', ');
+    final hi = owner.text.trim().isEmpty ? 'Chào anh chị' : 'Chào ${owner.text.trim()}';
+    return '$hi, hôm nay đội thi công đã ${what.isNotEmpty ? what : 'cập nhật tiến độ công trình ${str(r['project'])}'}, '
+        'anh chị xem qua ảnh báo cáo công trình ạ, em cám ơn anh chị ạ.';
   }
 
-  /// "Link gởi khách hàng": có SĐT Zalo chủ nhà thì chép lời nhắn + link rồi mở chat Zalo (Zalo không cho điền sẵn
+  /// "Gởi khách hàng": có SĐT Zalo chủ nhà thì chép lời nhắn + link rồi mở chat Zalo (Zalo không cho điền sẵn
   /// tin, nhà thầu dán vào); chưa có SĐT thì mở bảng chia sẻ của máy (Zalo, Messenger, SMS...).
   Future<void> share() async {
     final text = '${msg.text.trim()}\n$url';
@@ -395,7 +396,7 @@ class _NtReportScreenState extends State<NtReportScreen> with PageData {
                   style: FilledButton.styleFrom(backgroundColor: _zalo, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                   onPressed: r == null || sharing ? null : share,
                   icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                  label: const Text('Link gởi khách hàng', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+                  label: const Text('Gởi khách hàng', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
                 ),
               ),
             ),
