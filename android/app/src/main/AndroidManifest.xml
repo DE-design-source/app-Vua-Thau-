@@ -4,7 +4,7 @@
     <!-- Chụp ảnh công trình để nộp hồ sơ nghiệm thu -->
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Lưu ảnh vào máy (Cài đặt nhà thầu): Android 10 trở xuống cần quyền ghi bộ nhớ -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" tools:replace="android:maxSdkVersion" />
     <!-- Ảnh nghiệm thu bắt buộc có giờ và vị trí công trình -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
