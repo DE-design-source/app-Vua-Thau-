@@ -84,7 +84,7 @@ class CameraScreen extends StatefulWidget {
   /// Xong -> màn Xác nhận nhật ký: công trình + khớp GPS, hạng mục hôm nay, ghi chú -> tải lên). ntLat/ntLng: vị trí dự án nếu có.
   /// ntBrand: tên công ty nhà thầu in trên ảnh (dải chữ mới: tên công ty | ngày giờ, địa chỉ, GPS).
   /// ntLogo / ntScale / ntBadge: màn Logo trên ảnh (logo công ty thay tên chữ, cỡ, nhãn Vua Thầu xác minh).
-  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng, this.ntBrand = '', this.ntLogo, this.ntScale = 1, this.ntBadge = false, this.ntPick});
+  const CameraScreen({super.key, this.hid = 0, this.have = 0, this.ntProject = 0, this.ntName = '', this.ntLat, this.ntLng, this.ntBrand = '', this.ntLogo, this.ntScale = 1, this.ntBadge = false, this.ntPick, this.bottomBar});
   final int hid, have, ntProject;
   final String ntName, ntBrand;
   final ui.Image? ntLogo;
@@ -94,6 +94,9 @@ class CameraScreen extends StatefulWidget {
   /// ntPick: nhà thầu bấm Chụp hình -> vào camera ngay (chưa có dự án), chụp xong mới chọn dự án (góp ý 24/11/2026).
   /// Trả về dự án đã chọn ({id, name, lat, lng}) hoặc null.
   final Future<Map<String, dynamic>?> Function(BuildContext context)? ntPick;
+
+  /// bottomBar: thanh tab của app hiện dưới màn chụp (máy dọc), như các màn khác.
+  final Widget? bottomBar;
   final double? ntLat, ntLng;
   @override
   State<CameraScreen> createState() => _CameraScreenState();
@@ -745,7 +748,11 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             leave();
           }
         },
-        child: Scaffold(backgroundColor: Colors.black, body: denied ? _denied() : Stack(children: [_camera(), if (review) _review()])),
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          bottomNavigationBar: !review && MediaQuery.orientationOf(context) == Orientation.portrait ? widget.bottomBar : null,
+          body: denied ? _denied() : Stack(children: [_camera(), if (review) _review()]),
+        ),
       ),
     );
   }
@@ -979,15 +986,15 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               child: Opacity(
                 opacity: recording || canRecord ? 1 : 0.4,
                 child: Container(
-                  width: 76,
-                  height: 76,
+                  width: 86,
+                  height: 86,
                   decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
                   alignment: Alignment.center,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    width: recording ? 30 : 60,
-                    height: recording ? 30 : 60,
-                    decoration: BoxDecoration(color: const Color(0xFFE5322D), borderRadius: BorderRadius.circular(recording ? 8 : 30)),
+                    width: recording ? 32 : 70,
+                    height: recording ? 32 : 70,
+                    decoration: BoxDecoration(color: const Color(0xFFE5322D), borderRadius: BorderRadius.circular(recording ? 8 : 35)),
                   ),
                 ),
               ),
@@ -1002,16 +1009,16 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               child: Opacity(
                 opacity: canShoot ? 1 : 0.4,
                 child: Container(
-                  width: 76,
-                  height: 76,
+                  width: 86,
+                  height: 86,
                   decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
                   alignment: Alignment.center,
                   child: Container(
-                    width: 60,
-                    height: 60,
+                    width: 70,
+                    height: 70,
                     decoration: const BoxDecoration(color: C.amber, shape: BoxShape.circle),
                     alignment: Alignment.center,
-                    child: const Ic('camera', color: C.amberInk, size: 26),
+                    child: const Ic('camera', color: C.amberInk, size: 30),
                   ),
                 ),
               ),
@@ -1090,7 +1097,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         // Màn NGANG (trình duyệt cầm ngang; app Android khoá dọc): khung ngắm ngang cao hết màn bên trái,
         // nút chụp thành cột bên phải. Ảnh chụp trên web cầm ngang cũng ra ngang, nên vẫn thấy gì chụp nấy.
         final land = box.maxWidth > box.maxHeight;
-        const ctlH = 138.0, ctlW = 128.0; // hàng nút chụp + Ảnh / Video (dọc) / cột nút (ngang)
+        const ctlH = 148.0, ctlW = 128.0; // hàng nút chụp + Ảnh / Video (dọc) / cột nút (ngang)
         final double fw, fh;
         if (land) {
           final h = math.min(box.maxHeight, (box.maxWidth - ctlW - safe.right) / ar);

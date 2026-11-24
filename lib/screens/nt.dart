@@ -130,33 +130,46 @@ class _NtShellState extends State<NtShell> {
         NtExplore(key: exploreKey, map: NtMap(key: mapKey)),
       ],
     ),
-    bottomNavigationBar: Container(
-      decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: C.line))),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: 68,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: NavItem(label: 'Trang chủ', icon: Icons.home_outlined, iconOn: Icons.home, on: tab == 0, onTap: () => _go(0))),
-              Expanded(child: NavItem(label: 'Dự án', icon: Icons.work_outline, iconOn: Icons.work, on: tab == 1, onTap: () => _go(1))),
-              Expanded(child: ShootItem(on: false, onTap: shoot)),
-              Expanded(child: NavItem(label: 'Khám phá', icon: Icons.explore_outlined, iconOn: Icons.explore, on: tab == 2, onTap: () => _go(2))),
-              Expanded(
-                child: NavItem(
-                  label: 'Tài khoản',
-                  icon: Icons.account_circle_outlined,
-                  iconOn: Icons.account_circle,
-                  on: false,
-                  onTap: () => push(context, const NtAccount()),
+    bottomNavigationBar: navBar(),
+  );
+
+  /// Thanh tab dưới. camera: true -> thanh hiện trong màn chụp (góp ý 24/11/2026: mở chụp ảnh vẫn hiện menu trắng, không
+  /// đen cả đáy); "Chụp hình" đang chọn, bấm tab khác: đóng camera (ảnh chưa gửi thì camera hỏi trước) rồi chuyển tab.
+  Widget navBar({bool camera = false}) => Builder(
+    builder: (ctx) {
+      void go(VoidCallback then) async {
+        if (!camera) return then();
+        if (await Navigator.of(ctx).maybePop() && mounted) then();
+      }
+
+      return Container(
+        decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: C.line))),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 68,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: NavItem(label: 'Trang chủ', icon: Icons.home_outlined, iconOn: Icons.home, on: !camera && tab == 0, onTap: () => go(() => _go(0)))),
+                Expanded(child: NavItem(label: 'Dự án', icon: Icons.work_outline, iconOn: Icons.work, on: !camera && tab == 1, onTap: () => go(() => _go(1)))),
+                Expanded(child: ShootItem(on: camera, onTap: camera ? () {} : shoot)),
+                Expanded(child: NavItem(label: 'Khám phá', icon: Icons.explore_outlined, iconOn: Icons.explore, on: !camera && tab == 2, onTap: () => go(() => _go(2)))),
+                Expanded(
+                  child: NavItem(
+                    label: 'Tài khoản',
+                    icon: Icons.account_circle_outlined,
+                    iconOn: Icons.account_circle,
+                    on: false,
+                    onTap: () => go(() => push(context, const NtAccount())),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
-    ),
+      );
+    },
   );
 
   void _go(int i) {
@@ -170,7 +183,8 @@ class _NtShellState extends State<NtShell> {
 
 /// Chụp nhật ký hôm nay (nút Chụp hình / "Chụp nhật ký hôm nay"): vào camera ngay, chụp xong mới chọn dự án
 /// (góp ý 24/11/2026: "Vào chụp ảnh trực tiếp không cần hỏi, chọn điền dự án vào sau").
-Future<bool?> captureToday(BuildContext context) => push<bool>(context, _ntCamera(null));
+Future<bool?> captureToday(BuildContext context) =>
+    push<bool>(context, _ntCamera(null, bottomBar: context.findAncestorStateOfType<_NtShellState>()?.navBar(camera: true)));
 
 /// Chọn dự án cho nhật ký vừa chụp: dự án đang thi công (mới cập nhật trước), dự án đã hoàn thành, hoặc tạo dự án mới.
 Future<Json?> pickNtProject(BuildContext context) async {
@@ -217,7 +231,7 @@ Future<Json?> pickNtProject(BuildContext context) async {
 double? _num(Object? v) => v is num ? v.toDouble() : null;
 
 /// Camera chụp nhật ký cho dự án p (có vị trí dự án thì màn Xác nhận báo khớp GPS); p null: chụp trước, chọn dự án sau.
-Widget _ntCamera(Json? p) {
+Widget _ntCamera(Json? p, {Widget? bottomBar}) {
   final b = ntBranding.value;
   return CameraScreen(
     ntProject: p == null ? 0 : asInt(p['id']),
@@ -225,6 +239,7 @@ Widget _ntCamera(Json? p) {
     ntLat: p == null ? null : _num(p['lat']),
     ntLng: p == null ? null : _num(p['lng']),
     ntPick: pickNtProject,
+    bottomBar: bottomBar,
     ntBrand: b.brand.isNotEmpty ? b.brand : ntCompany.value,
     ntLogo: b.logo,
     ntScale: b.scale,

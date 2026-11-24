@@ -194,21 +194,21 @@ class ShootItem extends StatelessWidget {
           // Nút tròn nhô lên trên mép thanh tab (không làm thanh cao thêm)
           child: Stack(clipBehavior: Clip.none, alignment: Alignment.topCenter, children: [
             Positioned(
-              top: -18,
+              top: -24,
               child: Container(
-                width: 60,
-                height: 60,
+                width: 70,
+                height: 70,
                 decoration: BoxDecoration(
                   color: C.amber,
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 3),
                   boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2))],
                 ),
-                child: const Icon(Icons.photo_camera, color: C.navy, size: 28),
+                child: const Icon(Icons.photo_camera, color: C.navy, size: 33),
               ),
             ),
             Positioned(
-              bottom: 9,
+              bottom: 6,
               child: Text('Chụp hình',
                   style: TextStyle(color: C.navy, fontWeight: on ? FontWeight.w700 : FontWeight.w600, fontSize: 12)),
             ),
