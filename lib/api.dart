@@ -13,9 +13,11 @@ import 'package:http_parser/http_parser.dart' show MediaType;
 import 'lfile.dart';
 import 'toast.dart';
 
-/// Đổi máy chủ khi build: flutter build apk --dart-define=API_URL=https://...
-/// (máy ảo Android gọi backend chạy trên máy tính: http://10.0.2.2:8080)
-const host = String.fromEnvironment('API_URL', defaultValue: 'https://map.vuathau.com.vn');
+/// Đổi máy chủ khi build: ghi API_URL trong .env (xem .env.example) rồi --dart-define-from-file=.env,
+/// hoặc --dart-define=API_URL=https://... (máy ảo Android gọi backend chạy trên máy tính: http://10.0.2.2:8080).
+/// API_URL để trống / không có = máy chủ thật.
+const _apiUrl = String.fromEnvironment('API_URL');
+const host = _apiUrl == '' ? 'https://map.vuathau.com.vn' : _apiUrl;
 const base = '$host/api/v1';
 
 typedef Json = Map<String, dynamic>;

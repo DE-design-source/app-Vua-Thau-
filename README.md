@@ -50,12 +50,22 @@ flutter build apk --release                 # build/app/outputs/flutter-apk/app-
 flutter build apk --release --split-per-abi # APK nhỏ hơn cho từng loại máy
 ```
 
-Đổi máy chủ: `--dart-define=API_URL=...` (chỉ ghi gốc máy chủ, app tự thêm `/api/v1`), vd:
+### File .env
+
+Cấu hình đặt ở gốc repo, **không có trong git** (xin file mẫu từ admin):
+`.env` cho máy dev (`flutter run`), `.env.production` chỉ khi build bản phát hành trỏ máy chủ khác.
+
+Hiện chỉ có `API_URL`: gốc máy chủ (app tự thêm `/api/v1`); để trống hoặc không truyền file = máy chủ thật
+`https://map.vuathau.com.vn`.
 
 ```bash
-flutter build apk --dart-define=API_URL=https://may-chu-khac
-flutter run --dart-define=API_URL=http://10.0.2.2:8080   # máy ảo Android gọi backend Go chạy trên máy tính
+echo API_URL=http://10.0.2.2:8080 > .env   # máy ảo Android gọi backend Go trên máy tính
+flutter run --dart-define-from-file=.env
+flutter build apk --release      # bản phát hành: không truyền .env của máy dev
+flutter build apk --release --dart-define-from-file=.env.production   # khi cần trỏ máy chủ khác
 ```
+
+Vẫn dùng được `--dart-define=API_URL=...` như trước.
 
 Bản debug cho phép gọi `http://` (`android/app/src/debug/AndroidManifest.xml`); bản release chỉ gọi `https://`.
 

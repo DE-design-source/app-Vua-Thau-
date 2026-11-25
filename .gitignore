@@ -46,3 +46,7 @@ app.*.map.json
 
 # Báo cáo build Gradle
 /android/build/
+
+# Cấu hình máy: .env, .env.production (không đưa lên git)
+.env
+.env.*
