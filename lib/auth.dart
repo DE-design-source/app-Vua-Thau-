@@ -216,3 +216,47 @@ class BankFields extends StatelessWidget {
         ),
       ]);
 }
+
+/// Đăng ký không hỏi tài khoản nhận tiền nữa (góp ý Lark 26/11/2026: tạo tài khoản rút gọn tối đa).
+/// CTV / tổ đội chưa có tài khoản nhận tiền: hỏi ở lần nộp hồ sơ đầu tiên.
+/// Trả false khi người dùng đóng bảng (ở lại màn chụp), true khi đã lưu hoặc chọn "Để sau".
+Future<bool> askBankIfMissing(BuildContext context) async {
+  final u = me.value;
+  if (u == null || str(u['role']) != 'ctv' || str(u['bank']).isNotEmpty) return true;
+  final c = BankCtl();
+  var busy = false;
+  final ok = await showModalBottomSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => Padding(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + MediaQuery.viewInsetsOf(ctx).bottom + MediaQuery.paddingOf(ctx).bottom),
+        child: SingleChildScrollView(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: 12, children: [
+            const Text('Tài khoản nhận tiền', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: C.text)),
+            const Text('Hồ sơ đầu tiên của bạn: nhập tài khoản ngân hàng để kế toán chuyển tiền. Đã lưu thì muốn đổi phải nhờ admin.',
+                style: T.muted),
+            BankFields(c: c),
+            Btn('Lưu và nộp hồ sơ', kind: BtnKind.primary, busy: busy, disabled: busy, onPressed: () async {
+              set(() => busy = true);
+              try {
+                toast(msgsOf(await put('/me/bank', c.toJson())));
+                await loadMe();
+                if (ctx.mounted) Navigator.of(ctx).pop(true);
+              } catch (e) {
+                toast(errMsg(e));
+              } finally {
+                if (ctx.mounted) set(() => busy = false);
+              }
+            }),
+            Btn('Để sau, nộp hồ sơ luôn', onPressed: busy ? null : () => Navigator.of(ctx).pop(true)),
+          ]),
+        ),
+      ),
+    ),
+  );
+  c.dispose();
+  return ok == true;
+}

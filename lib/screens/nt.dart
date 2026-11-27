@@ -18,6 +18,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../api.dart';
+import '../lfile.dart' show saveTemp, saveToDevice;
 import '../page.dart';
 import '../stamp.dart' show StampData, p2;
 import '../toast.dart';
@@ -103,6 +104,14 @@ const _prefs = FlutterSecureStorage();
 Future<void> loadSaveDevice() async {
   try {
     ntSaveDevice.value = await _prefs.read(key: 'nt_save_device') == '1';
+    camGrid.value = await _prefs.read(key: 'cam_grid') == '1';
+  } catch (_) {}
+}
+
+Future<void> setCamGrid(bool on) async {
+  camGrid.value = on;
+  try {
+    await _prefs.write(key: 'cam_grid', value: on ? '1' : '0');
   } catch (_) {}
 }
 
@@ -1556,7 +1565,8 @@ class _LogItem extends StatelessWidget {
   }
 }
 
-/// Xem ảnh lớn, vuốt qua lại; đầu trang "2 / 9" + tên dự án · ngày.
+/// Xem ảnh lớn, vuốt qua lại; đầu trang "2 / 9" + tên dự án · ngày, nút tải ảnh về máy;
+/// cuối trang dải ảnh nhỏ để nhảy nhanh (thiết kế "Xem ảnh toàn màn hình", góp ý Lark 26/11/2026).
 class _Viewer extends StatefulWidget {
   const _Viewer({required this.ids, required this.start, this.title = '', this.at});
   final List<int> ids;
@@ -1570,16 +1580,51 @@ class _Viewer extends StatefulWidget {
 class _ViewerState extends State<_Viewer> {
   late int i = widget.start;
   late final ctl = PageController(initialPage: widget.start);
+  final strip = ScrollController();
+  bool saving = false;
+
+  static const _thumb = 56.0, _gap = 6.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _follow());
+  }
 
   @override
   void dispose() {
     ctl.dispose();
+    strip.dispose();
     super.dispose();
+  }
+
+  /// giữ ảnh đang xem ở giữa dải ảnh nhỏ
+  void _follow() {
+    if (!strip.hasClients) return;
+    final x = (i * (_thumb + _gap) - (strip.position.viewportDimension - _thumb) / 2).clamp(0.0, strip.position.maxScrollExtent);
+    strip.animateTo(x, duration: const Duration(milliseconds: 220), curve: Curves.easeOut);
+  }
+
+  Future<void> download() async {
+    setState(() => saving = true);
+    try {
+      final id = widget.ids[i];
+      final r = await http.get(Uri.parse(ntPhoto(id, small: false)), headers: authHeaders()).timeout(const Duration(seconds: 60));
+      if (r.statusCode != 200) throw ApiError('Không tải được ảnh (mã ${r.statusCode}).');
+      final name = 'vuathau-$id.jpg';
+      await saveToDevice(await saveTemp(r.bodyBytes, name), name);
+      toast(kIsWeb ? 'Đã tải ảnh về máy.' : 'Đã lưu ảnh vào thư viện ảnh (album Vua Thầu).');
+    } catch (e) {
+      toast(errMsg(e));
+    } finally {
+      if (mounted) setState(() => saving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final t = DateTime.tryParse(str(widget.at))?.toLocal();
+    final many = widget.ids.length > 1;
     return Scaffold(
       backgroundColor: const Color(0xFF05080F),
       appBar: AppBar(
@@ -1592,12 +1637,59 @@ class _ViewerState extends State<_Viewer> {
             Text('${widget.title}${t != null ? ' · ${p2(t.day)}/${p2(t.month)}' : ''}',
                 style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFCBD5E1))),
         ]),
+        actions: [
+          IconButton(
+            tooltip: 'Tải ảnh về máy',
+            onPressed: saving ? null : download,
+            icon: saving
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.download_rounded),
+          ),
+        ],
       ),
-      body: PageView(
-        controller: ctl,
-        onPageChanged: (k) => setState(() => i = k),
-        children: [for (final id in widget.ids) InteractiveViewer(child: Center(child: NetPhoto(ntPhoto(id, small: false), fit: BoxFit.contain)))],
-      ),
+      body: Column(children: [
+        Expanded(
+          child: PageView(
+            controller: ctl,
+            onPageChanged: (k) {
+              setState(() => i = k);
+              _follow();
+            },
+            children: [for (final id in widget.ids) InteractiveViewer(child: Center(child: NetPhoto(ntPhoto(id, small: false), fit: BoxFit.contain)))],
+          ),
+        ),
+        if (many)
+          SafeArea(
+            top: false,
+            child: SizedBox(
+              height: _thumb + 20,
+              child: ListView.separated(
+                controller: strip,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                itemCount: widget.ids.length,
+                separatorBuilder: (_, _) => const SizedBox(width: _gap),
+                itemBuilder: (context, k) => GestureDetector(
+                  onTap: () => ctl.animateToPage(k, duration: const Duration(milliseconds: 250), curve: Curves.easeOut),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 150),
+                    opacity: k == i ? 1 : .55,
+                    child: Container(
+                      width: _thumb,
+                      height: _thumb,
+                      clipBehavior: Clip.antiAlias,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: k == i ? C.amber : Colors.transparent, width: 2),
+                      ),
+                      child: NetPhoto(ntPhoto(widget.ids[k]), fit: BoxFit.cover),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }
@@ -1812,6 +1904,26 @@ class _NtAccountState extends State<NtAccount> with PageData {
                           activeTrackColor: _green,
                           onChanged: setSaveDevice,
                         ),
+                      ),
+                      const Divider(height: 1, indent: 16),
+                      ValueListenableBuilder<bool>(
+                        valueListenable: camGrid,
+                        builder: (context, on, _) => SwitchListTile(
+                          secondary: const Icon(Icons.grid_on_rounded, color: _blue),
+                          title: const Text('Lưới căn khung', style: TextStyle(fontWeight: FontWeight.w700)),
+                          subtitle: const Text('Hiện lưới chia ba trên camera để chụp thẳng, cân'),
+                          value: on,
+                          activeTrackColor: _green,
+                          onChanged: setCamGrid,
+                        ),
+                      ),
+                      const Divider(height: 1, indent: 16),
+                      ListTile(
+                        leading: const Icon(Icons.support_agent_rounded, color: _blue),
+                        title: const Text('Hỗ trợ & góp ý', style: TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: const Text('Chấm điểm app, gửi góp ý cho Vua Thầu'),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => showFeedbackSheet(context),
                       ),
                     ]),
                   ),

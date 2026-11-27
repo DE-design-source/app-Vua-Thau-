@@ -27,6 +27,19 @@ Future<void> checkAndShowRating(BuildContext context) async {
 }
 
 /// Về màn chính: tới lúc thì hiện hộp đánh giá (mỗi lần tới lúc chỉ hiện 1 lần).
+/// "Hỗ trợ & góp ý" (Cài đặt nhà thầu): mở bảng chấm sao + góp ý bất cứ lúc nào.
+void showFeedbackSheet(BuildContext context) {
+  if (_showing) return;
+  _showing = true;
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (_) => const _RatingSheet(),
+  ).whenComplete(() => _showing = false);
+}
+
 void showRatingIfDue(BuildContext context) {
   if (!_due || _showing || !loggedIn()) return;
   // màn khác (camera, hồ sơ...) đang nằm trên: để lần về màn chính sau

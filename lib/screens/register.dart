@@ -27,7 +27,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   late final name = TextEditingController(text: pendingGoogle?.name ?? '');
   late final phone = TextEditingController(text: widget.phone);
   final company = TextEditingController(), street = TextEditingController();
-  final bank = BankCtl();
   late String role = const [roleCtvReg, roleNtReg, roleTeamReg].contains(widget.role) ? widget.role : roleCtvReg;
   String prov = '', ward = '', busy = '', sent = '';
   final cats = <String>{};
@@ -41,7 +40,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     phone.dispose();
     company.dispose();
     street.dispose();
-    bank.dispose();
     super.dispose();
   }
 
@@ -109,7 +107,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (mounted) setState(() => sent = str(j['message']));
       return;
     }
-    final j = await post('/auth/register', {if (g != null) 'id_token': g!.idToken, ...base, 'role': role, ...bank.toJson()});
+    final j = await post('/auth/register', {if (g != null) 'id_token': g!.idToken, ...base, 'role': role});
     await signedIn(j);
   });
 
@@ -249,10 +247,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           _select('Phường / Xã', ward, prov.isEmpty ? 'Chọn tỉnh trước' : 'Chọn phường', chooseWard),
                         ]),
                         Field(label: 'Số nhà, tên đường', controller: street, placeholder: 'VD: 12 Nguyễn Huệ'),
-                        if (pays) ...[
-                          const Padding(padding: EdgeInsets.only(top: 8), child: Text('Tài khoản nhận tiền', style: T.secT)),
-                          BankFields(c: bank),
-                        ],
+                        // tài khoản nhận tiền: hỏi ở lần nộp hồ sơ đầu tiên (góp ý Lark 26/11/2026: tạo tài khoản rút gọn tối đa)
                         Btn(role == roleNtReg ? 'Gửi đăng ký nhà thầu' : 'Tạo tài khoản',
                             kind: BtnKind.primary, onPressed: submit, busy: busy == 'go', disabled: busy.isNotEmpty),
                       ],

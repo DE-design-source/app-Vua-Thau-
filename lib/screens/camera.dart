@@ -17,6 +17,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../api.dart';
+import '../auth.dart' show askBankIfMissing;
 import '../check.dart';
 import '../lfile.dart';
 import '../live/live.dart';
@@ -714,6 +715,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       setState(() => err = 'Chụp ít nhất 1 ảnh để tạo hồ sơ, rồi mới tải video lên.');
       return;
     }
+    // hồ sơ mới mà chưa có tài khoản nhận tiền (đăng ký không hỏi nữa): hỏi ở lần nộp đầu
+    if (!mounted) return;
+    if (target == null && !await askBankIfMissing(context)) return;
+    if (!mounted) return;
     setState(() {
       err = '';
       pct = 0;
@@ -1235,6 +1240,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   const Center(child: CircularProgressIndicator(color: Colors.white)),
                 IgnorePointer(child: CustomPaint(painter: StampPainter(_styled(StampData(now, pos, addr, brand: widget.ntBrand, logo: widget.ntLogo, scale: widget.ntScale, badge: widget.ntBadge))))),
                 IgnorePointer(child: CustomPaint(painter: _LivePainter(live.phoneBox, live.companyBox, live.roll))),
+                ValueListenableBuilder<bool>(
+                  valueListenable: camGrid,
+                  builder: (context, on, _) => on ? const IgnorePointer(child: CustomPaint(painter: _GridPainter())) : const SizedBox.shrink(),
+                ),
                 if (recording && recAt != null)
                   Positioned(
                     right: 10,
@@ -1553,7 +1562,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                         else
                         Text(
                           total >= cfg.minPhotos
-                              ? 'Hồ sơ $total ảnh · dự kiến ${money(cfg.payFor(total))}'
+                              ? 'Hồ sơ $total ảnh'
                               : 'Cần ít nhất ${cfg.minPhotos} ảnh, còn thiếu ${cfg.minPhotos - total}',
                           style: T.muted.copyWith(fontSize: 14),
                         ),
@@ -1688,6 +1697,26 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 }
 
 /// Khung vàng quanh chữ đọc được (toạ độ 0..1) + vạch thăng bằng khi máy nghiêng.
+/// "Lưới căn khung" (Cài đặt nhà thầu): 2 đường dọc + 2 đường ngang chia ba khung ngắm, giúp chụp thẳng, cân.
+final camGrid = ValueNotifier<bool>(false);
+
+class _GridPainter extends CustomPainter {
+  const _GridPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()
+      ..color = Colors.white.withValues(alpha: .45)
+      ..strokeWidth = 1;
+    for (var k = 1; k < 3; k++) {
+      canvas.drawLine(Offset(size.width * k / 3, 0), Offset(size.width * k / 3, size.height), p);
+      canvas.drawLine(Offset(0, size.height * k / 3), Offset(size.width, size.height * k / 3), p);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GridPainter old) => false;
+}
+
 class _LivePainter extends CustomPainter {
   _LivePainter(this.phone, this.company, this.roll);
   final TextPiece? phone, company;
